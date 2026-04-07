@@ -45,11 +45,13 @@ export default function PlayPage() {
   // Timer et données live : tout est recalculé à chaque tick (500ms)
   useEffect(() => {
     let active = true;
-    let poller: number;
-
+    let poller: number | null = null;
+    let pauseTimeout: number | null = null;
 
     async function refreshLive() {
       if (!programId) return;
+      // Si le timer est à zéro et qu'on attend un resolve, ne poll pas (évite le spam)
+      if (remainingSeconds === 0) return;
       try {
         // 1. Vault (leader, slots...)
         const nextVault = await fetchVault(connection, programId);
@@ -57,7 +59,7 @@ export default function PlayPage() {
         setVault(nextVault);
 
         // 2. Pot = solde du compte vault (PDA)
-        const { vault: vaultPda } = getNodusAccounts(programId, programId); // le vault est indépendant du signer
+        const { vault: vaultPda } = getNodusAccounts(programId, programId);
         const vaultBalance = await connection.getBalance(vaultPda);
         setPot(formatSolFromLamports(vaultBalance));
 
@@ -85,8 +87,6 @@ export default function PlayPage() {
             const { userState } = getNodusAccounts(programId, sessionWallet.publicKey);
             const acc = await connection.getAccountInfo(userState);
             if (acc && acc.data) {
-              // Pas de champ stake direct, on peut afficher le nombre d'actions ce cycle
-              // (optionnel: décoder plus finement si besoin)
               setUserStake("? (voir userState)");
             } else {
               setUserStake("0.0000");
@@ -114,59 +114,33 @@ export default function PlayPage() {
         }
       } catch (err) {
         if (!active) return;
-        // Gestion spéciale du 429
+        // Gestion spéciale du 429 : pause le polling 10s
         if (err && typeof err === "object" && "message" in err && String(err.message).includes("429")) {
-          setError("Trop de requêtes RPC (429). Ralentis le rafraîchissement ou utilise un endpoint RPC privé.");
+          setError("Trop de requêtes RPC (429). Pause 10s...");
+          if (poller) window.clearInterval(poller);
+          poller = null;
+          if (pauseTimeout) window.clearTimeout(pauseTimeout);
+          pauseTimeout = window.setTimeout(() => {
+            setError(null);
+            if (active && !poller) {
+              poller = window.setInterval(refreshLive, 2000);
+            }
+          }, 10000);
         } else {
           setError(err instanceof Error ? err.message : "Erreur de rafraîchissement live.");
         }
-        // Ne pas reset le timer, garder la dernière valeur connue
       }
     }
 
-    void refreshLive();
     poller = window.setInterval(refreshLive, 2000);
     return () => {
       active = false;
-      window.clearInterval(poller);
+      if (poller) window.clearInterval(poller);
+      if (pauseTimeout) window.clearTimeout(pauseTimeout);
     };
-  }, [connection, programId, sessionWallet]);
+  }, [connection, programId, sessionWallet, remainingSeconds]);
 
-  useEffect(() => {
-    let active = true;
 
-    async function refresh() {
-      if (!programId) {
-        return;
-      }
-
-      try {
-        const nextVault = await fetchVault(connection, programId);
-        if (!active) return;
-
-        startTransition(() => {
-          setVault(nextVault);
-          if (nextVault) {
-            const approxSeconds = Math.max(15, Math.floor(Number(nextVault.timerResetSlots) * 0.45));
-            setRemainingSeconds(approxSeconds);
-          }
-        });
-      } catch (refreshError) {
-        if (!active) return;
-        setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh the vault.");
-      }
-    }
-
-    void refresh();
-    const poller = window.setInterval(() => {
-      void refresh();
-    }, 500);
-
-    return () => {
-      active = false;
-      window.clearInterval(poller);
-    };
-  }, [connection, programId]);
 
   async function handleInitialize() {
     if (!connected || !publicKey || !sendTransaction || !programId) {
@@ -278,6 +252,13 @@ export default function PlayPage() {
       const signature = await connection.sendRawTransaction(transaction.serialize());
       setLatestSignature(signature);
       setNotice(`${actionLabel} transaction sent to devnet.`);
+      // Si c'est un resolve, force un refresh immédiat pour afficher le nouveau cycle
+      if (action === "Resolve") {
+        setTimeout(() => {
+          // On force le polling à rafraîchir tout de suite
+          window.location.reload(); // solution simple pour forcer le refresh complet
+        }, 1200);
+      }
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : `${String(action)} failed.`);
     } finally {
