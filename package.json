@@ -1,0 +1,17 @@
+{
+  "name": "nodus-protocol",
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "workspaces": [
+    "apps/web",
+    "packages/sdk"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @nodus/web",
+    "build": "npm run build --workspace @nodus/web",
+    "lint": "npm run lint --workspace @nodus/web",
+    "typecheck": "npm run typecheck --workspace @nodus/web",
+    "deploy:devnet": "bash scripts/deploy-devnet.sh",
+    "web:env:devnet": "node scripts/set-web-devnet-env.mjs"
+  }
+}
