@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { startTransition, useEffect, useState } from "react";
-import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId } from "../../lib/nodus-client";
+import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, type NodusVault } from "@nodus/sdk";
@@ -30,6 +30,10 @@ export default function PlayPage() {
   const [error, setError] = useState<string | null>(null);
   const [latestSignature, setLatestSignature] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(15);
+  const [pot, setPot] = useState<string>("0.0000");
+  const [sessionBalance, setSessionBalance] = useState<string>("0.0000");
+  const [userStake, setUserStake] = useState<string>("0.0000");
+  const [cycleStatus, setCycleStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   const programId = getProgramId();
@@ -38,12 +42,89 @@ export default function PlayPage() {
     setSessionWallet(loadSessionWallet());
   }, []);
 
+  // Timer et données live : tout est recalculé à chaque tick (500ms)
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemainingSeconds((current) => Math.max(0, current - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    let active = true;
+    let poller: number;
+
+
+    async function refreshLive() {
+      if (!programId) return;
+      try {
+        // 1. Vault (leader, slots...)
+        const nextVault = await fetchVault(connection, programId);
+        if (!active) return;
+        setVault(nextVault);
+
+        // 2. Pot = solde du compte vault (PDA)
+        const { vault: vaultPda } = getNodusAccounts(programId, programId); // le vault est indépendant du signer
+        const vaultBalance = await connection.getBalance(vaultPda);
+        setPot(formatSolFromLamports(vaultBalance));
+
+        // 3. Timer live
+        const currentSlot = await connection.getSlot();
+        let secondsLeft = 0;
+        if (nextVault) {
+          const slotEnd = Number(nextVault.timerStartSlot) + Number(nextVault.timerResetSlots);
+          const slotsLeft = Math.max(0, slotEnd - currentSlot);
+          secondsLeft = Math.floor(slotsLeft * 0.45);
+        }
+        setRemainingSeconds(secondsLeft);
+
+        // 4. Solde session wallet
+        if (sessionWallet) {
+          const bal = await connection.getBalance(sessionWallet.publicKey);
+          setSessionBalance(formatSolFromLamports(bal));
+        } else {
+          setSessionBalance("0.0000");
+        }
+
+        // 5. Mise utilisateur (userState)
+        if (sessionWallet && programId) {
+          try {
+            const { userState } = getNodusAccounts(programId, sessionWallet.publicKey);
+            const acc = await connection.getAccountInfo(userState);
+            if (acc && acc.data) {
+              // Pas de champ stake direct, on peut afficher le nombre d'actions ce cycle
+              // (optionnel: décoder plus finement si besoin)
+              setUserStake("? (voir userState)");
+            } else {
+              setUserStake("0.0000");
+            }
+          } catch {
+            setUserStake("0.0000");
+          }
+        } else {
+          setUserStake("0.0000");
+        }
+
+        // 6. Statut du cycle (gagné/perdu)
+        if (nextVault && sessionWallet) {
+          if (secondsLeft === 0) {
+            if (nextVault.leader === sessionWallet.publicKey.toBase58()) {
+              setCycleStatus("Cycle gagné ! 🎉");
+            } else {
+              setCycleStatus("Cycle perdu.");
+            }
+          } else {
+            setCycleStatus("");
+          }
+        } else {
+          setCycleStatus("");
+        }
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Erreur de rafraîchissement live.");
+      }
+    }
+
+    void refreshLive();
+    poller = window.setInterval(refreshLive, 500);
+    return () => {
+      active = false;
+      window.clearInterval(poller);
+    };
+  }, [connection, programId, sessionWallet]);
 
   useEffect(() => {
     let active = true;
@@ -227,8 +308,12 @@ export default function PlayPage() {
                 <strong className="terminal__value">{formatCountdown(remainingSeconds)}</strong>
               </div>
               <div className="terminal__row">
+                <span className="terminal__label">Pot</span>
+                <strong className="terminal__value">{pot} SOL</strong>
+              </div>
+              <div className="terminal__row">
                 <span className="terminal__label">Pressure</span>
-                <strong className="terminal__value">{vault ? String(vault.pressureCount) : "12"}</strong>
+                <strong className="terminal__value">{vault ? String(vault.pressureCount) : "-"}</strong>
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Reset floor</span>
@@ -242,6 +327,12 @@ export default function PlayPage() {
                 <span className="terminal__label">Fee wallet</span>
                 <strong className="terminal__value">{shortenAddress(FEE_WALLET)}</strong>
               </div>
+              {cycleStatus && (
+                <div className="terminal__row">
+                  <span className="terminal__label">Statut</span>
+                  <strong className="terminal__value">{cycleStatus}</strong>
+                </div>
+              )}
             </article>
 
             <article className="metric-board">
@@ -255,8 +346,16 @@ export default function PlayPage() {
                 <strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong>
               </div>
               <div className="session-row">
-                <span>Budget</span>
+                <span>Budget (prévu)</span>
                 <strong>{budget} SOL</strong>
+              </div>
+              <div className="session-row">
+                <span>Solde session</span>
+                <strong>{sessionBalance} SOL</strong>
+              </div>
+              <div className="session-row">
+                <span>Mise en cours</span>
+                <strong>{userStake} SOL</strong>
               </div>
               <div className="session-row">
                 <span>RPC</span>
