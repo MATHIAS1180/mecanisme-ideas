@@ -35,12 +35,40 @@ export default function PlayPage() {
   const [userStake, setUserStake] = useState<string>("0.0000");
   const [cycleStatus, setCycleStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [autoResolving, setAutoResolving] = useState(false);
 
   const programId = getProgramId();
 
+  // Auto-resolve : dès que le timer arrive à zéro, on envoie l'instruction automatiquement
   useEffect(() => {
-    setSessionWallet(loadSessionWallet());
-  }, []);
+    if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet) {
+      setAutoResolving(true);
+      (async () => {
+        try {
+          setNotice("Résolution du cycle en cours...");
+          const leader = vault?.leader ? new PublicKey(vault.leader) : sessionWallet.publicKey;
+          const expiry = BigInt((await connection.getSlot()) + 90);
+          const instruction = buildActionInstruction({
+            action: "Resolve",
+            programId,
+            signer: sessionWallet.publicKey,
+            leader,
+            snipeExpirySlot: expiry,
+          });
+          const transaction = new Transaction().add(instruction);
+          transaction.feePayer = sessionWallet.publicKey;
+          transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          transaction.sign(sessionWallet);
+          await connection.sendRawTransaction(transaction.serialize());
+          setNotice("Cycle résolu, nouveau cycle en cours.");
+        } catch (err) {
+          setError("Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
+        } finally {
+          setTimeout(() => setAutoResolving(false), 2000);
+        }
+      })();
+    }
+  }, [remainingSeconds, autoResolving, programId, sessionWallet, vault, connection]);
 
   // Timer et données live : tout est recalculé à chaque tick (500ms)
   useEffect(() => {
@@ -400,15 +428,14 @@ export default function PlayPage() {
             <article className="metric-board">
               <h3>Cycle actions</h3>
               <div className="action-grid">
-                {ACTION_BUTTONS.map(([action, body]) => {
+                {ACTION_BUTTONS.filter(([action]) => action !== "Resolve").map(([action, body]) => {
                   const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
-                  // Désactive toutes les actions sauf Resolve si le timer est à zéro
-                  const isResolve = action === "Resolve";
-                  const disabled = loading || !sessionWallet || !programId || (remainingSeconds === 0 && !isResolve);
+                  // Désactive toutes les actions si timer=0 ou resolve en cours
+                  const disabled = loading || autoResolving || !sessionWallet || !programId || remainingSeconds === 0;
                   return (
                     <button
                       key={action}
-                      onClick={() => handleAction(action as keyof typeof ACTION_COSTS | "Resolve")}
+                      onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
                       disabled={disabled}
                     >
                       <strong>{action}</strong>
@@ -417,10 +444,9 @@ export default function PlayPage() {
                     </button>
                   );
                 })}
-                {/* Message explicite si le cycle est à résoudre */}
-                {remainingSeconds === 0 && (
+                {autoResolving && (
                   <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500}}>
-                    Cycle terminé : cliquez sur <b>Resolve</b> pour passer au suivant !
+                    Résolution automatique du cycle en cours...
                   </div>
                 )}
               </div>
