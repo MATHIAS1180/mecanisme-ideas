@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useState, useRef } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
@@ -36,9 +36,13 @@ export default function PlayPage() {
   const [cycleStatus, setCycleStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [autoResolving, setAutoResolving] = useState(false);
+  const [lastTimerStart, setLastTimerStart] = useState<bigint | null>(null);
+  const [lastCycleNumber, setLastCycleNumber] = useState<bigint | null>(null);
 
   const programId = getProgramId();
 
+  // Expose refreshLive pour pouvoir l'appeler après resolve
+  const refreshLiveRef = useRef<() => void>(() => {});
   // Auto-resolve : dès que le timer arrive à zéro, on envoie l'instruction automatiquement
   useEffect(() => {
     if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet) {
@@ -61,6 +65,10 @@ export default function PlayPage() {
           transaction.sign(sessionWallet);
           await connection.sendRawTransaction(transaction.serialize());
           setNotice("Cycle résolu, nouveau cycle en cours.");
+          // Forcer un refresh immédiat après resolve
+          setTimeout(() => {
+            if (refreshLiveRef.current) refreshLiveRef.current();
+          }, 1200);
         } catch (err) {
           setError("Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
         } finally {
@@ -68,6 +76,7 @@ export default function PlayPage() {
         }
       })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingSeconds, autoResolving, programId, sessionWallet, vault, connection]);
 
   // Timer et données live : tout est recalculé à chaque tick (500ms)
@@ -77,14 +86,19 @@ export default function PlayPage() {
     let pauseTimeout: number | null = null;
 
     async function refreshLive() {
+        // Expose la fonction pour l'auto-resolve
+        refreshLiveRef.current = refreshLive;
       if (!programId) return;
-      // Si le timer est à zéro et qu'on attend un resolve, ne poll pas (évite le spam)
-      if (remainingSeconds === 0) return;
+      // Si le timer est à zéro ET que le timerStartSlot/cycleNumber n'a pas changé, ne poll pas (évite le spam)
+      if (vault && remainingSeconds === 0 && lastTimerStart === vault.timerStartSlot && lastCycleNumber === vault.cycleNumber) return;
       try {
         // 1. Vault (leader, slots...)
         const nextVault = await fetchVault(connection, programId);
         if (!active) return;
         setVault(nextVault);
+        // Mémorise le timerStartSlot et cycleNumber pour détecter le nouveau cycle
+        setLastTimerStart(nextVault ? nextVault.timerStartSlot : null);
+        setLastCycleNumber(nextVault ? nextVault.cycleNumber : null);
 
         // 2. Pot = solde du compte vault (PDA)
         const { vault: vaultPda } = getNodusAccounts(programId, programId);
