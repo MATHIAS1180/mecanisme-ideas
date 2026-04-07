@@ -114,12 +114,18 @@ export default function PlayPage() {
         }
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Erreur de rafraîchissement live.");
+        // Gestion spéciale du 429
+        if (err && typeof err === "object" && "message" in err && String(err.message).includes("429")) {
+          setError("Trop de requêtes RPC (429). Ralentis le rafraîchissement ou utilise un endpoint RPC privé.");
+        } else {
+          setError(err instanceof Error ? err.message : "Erreur de rafraîchissement live.");
+        }
+        // Ne pas reset le timer, garder la dernière valeur connue
       }
     }
 
     void refreshLive();
-    poller = window.setInterval(refreshLive, 500);
+    poller = window.setInterval(refreshLive, 2000);
     return () => {
       active = false;
       window.clearInterval(poller);
@@ -306,6 +312,9 @@ export default function PlayPage() {
               <div className="terminal__row">
                 <span className="terminal__label">Countdown</span>
                 <strong className="terminal__value">{formatCountdown(remainingSeconds)}</strong>
+                {error && error.includes("429") && (
+                  <span style={{ color: '#ff6b6b', fontSize: '0.9em', marginLeft: 8 }}>Trop de requêtes RPC (429)</span>
+                )}
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Pot</span>
