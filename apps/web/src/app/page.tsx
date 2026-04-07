@@ -1,5 +1,57 @@
+"use client";
 import Link from "next/link";
 import { features, homepageStats, timeline } from "../lib/site";
+import { useEffect, useState } from "react";
+import { fetchVault, getProgramId } from "../lib/nodus-client";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { formatSolFromLamports, shortenAddress } from "../lib/format";
+import { DEFAULT_RPC_URL } from "@nodus/sdk";
+
+function LiveVaultPanel() {
+  const [vault, setVault] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || DEFAULT_RPC_URL;
+    const programId = getProgramId();
+    if (!programId) return;
+    const connection = new Connection(rpc, "confirmed");
+    async function refresh() {
+      if (!programId) return;
+      try {
+        const v = await fetchVault(connection, programId);
+        if (active) setVault(v);
+      } catch (e) {
+        if (active) setError("Erreur de lecture du vault devnet");
+      }
+    }
+    refresh();
+    const poll = setInterval(refresh, 1000);
+    return () => { active = false; clearInterval(poll); };
+  }, []);
+  return (
+    <div className="terminal">
+      <p className="eyebrow">Cycle state (live devnet)</p>
+      {error && <div className="notice notice--danger">{error}</div>}
+      <div className="terminal__row">
+        <span className="terminal__label">Current leader</span>
+        <strong className="terminal__value">{shortenAddress(vault?.leader || "Live")}</strong>
+      </div>
+      <div className="terminal__row">
+        <span className="terminal__label">Pressure</span>
+        <strong className="terminal__value">{vault ? String(vault.pressureCount) : "-"}</strong>
+      </div>
+      <div className="terminal__row">
+        <span className="terminal__label">Carry-over loaded</span>
+        <strong className="terminal__value">{vault ? formatSolFromLamports(vault.carryOverLamports) + " SOL" : "-"}</strong>
+      </div>
+      <div className="terminal__row">
+        <span className="terminal__label">Frame</span>
+        <strong className="terminal__value">Devnet / Live</strong>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -22,35 +74,11 @@ export default function HomePage() {
               </Link>
             </div>
           </div>
-
           <div className="hero-panel">
-            <div className="terminal">
-              <p className="eyebrow">Cycle state preview</p>
-              <div className="terminal__row">
-                <span className="terminal__label">Current leader</span>
-                <strong className="terminal__value">8wQd...Jx5n</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Pressure</span>
-                <strong className="terminal__value">27</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Reset if challenged now</span>
-                <strong className="terminal__value">00:50</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Carry-over loaded</span>
-                <strong className="terminal__value">0.1200 SOL</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Frame</span>
-                <strong className="terminal__value">Devnet / Live</strong>
-              </div>
-            </div>
+            <LiveVaultPanel />
           </div>
         </div>
       </section>
-
       <section className="section section--tight shell">
         <div className="card-grid">
           {homepageStats.map((stat) => (

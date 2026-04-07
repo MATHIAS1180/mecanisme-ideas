@@ -5,7 +5,6 @@ import { startTransition, useEffect, useState } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
-import { mockCycles } from "../../lib/mock-data";
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
@@ -74,7 +73,7 @@ export default function PlayPage() {
     void refresh();
     const poller = window.setInterval(() => {
       void refresh();
-    }, 8000);
+    }, 500);
 
     return () => {
       active = false;
@@ -221,7 +220,7 @@ export default function PlayPage() {
               <p className="eyebrow">Cycle telemetry</p>
               <div className="terminal__row">
                 <span className="terminal__label">Leader</span>
-                <strong className="terminal__value">{shortenAddress(vault?.leader || mockCycles[0]?.winner || "Live")}</strong>
+                <strong className="terminal__value">{shortenAddress(vault?.leader || "Live")}</strong>
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Countdown</span>
@@ -343,13 +342,8 @@ export default function PlayPage() {
           </article>
 
           <article className="metric-board">
-            <h3>Recent cycle preview</h3>
-            {mockCycles.map((cycle) => (
-              <div key={`${cycle.cycle}-${cycle.status}`} className="history-row">
-                <span>Cycle {cycle.cycle}</span>
-                <strong>{cycle.status === "active" ? `${cycle.potSol} SOL live` : `${cycle.payoutSol} SOL settled`}</strong>
-              </div>
-            ))}
+            <h3>Recent cycles (live)</h3>
+            <div className="history-row">Aucun historique on-chain disponible pour le moment.</div>
           </article>
         </div>
       </section>

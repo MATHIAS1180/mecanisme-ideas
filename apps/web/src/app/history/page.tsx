@@ -1,4 +1,4 @@
-import { mockCycles } from "../../lib/mock-data";
+import React from "react";
 
 export default function HistoryPage() {
   return (
@@ -14,28 +14,7 @@ export default function HistoryPage() {
 
       <section className="section shell">
         <div className="history-grid">
-          {mockCycles.map((cycle) => (
-            <article key={`${cycle.cycle}-${cycle.status}`} className="card">
-              <p className="eyebrow">Cycle {cycle.cycle}</p>
-              <h3>{cycle.status === "active" ? "Active cycle" : "Resolved cycle"}</h3>
-              <div className="metric-row">
-                <span>Pot</span>
-                <strong>{cycle.potSol} SOL</strong>
-              </div>
-              <div className="metric-row">
-                <span>Winner</span>
-                <strong>{cycle.winner}</strong>
-              </div>
-              <div className="metric-row">
-                <span>Payout</span>
-                <strong>{cycle.payoutSol}</strong>
-              </div>
-              <div className="metric-row">
-                <span>Pressure</span>
-                <strong>{cycle.pressure}</strong>
-              </div>
-            </article>
-          ))}
+          <div className="cycle">Aucun historique on-chain disponible pour le moment.</div>
         </div>
       </section>
     </>
