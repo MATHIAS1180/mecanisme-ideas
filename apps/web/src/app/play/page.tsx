@@ -252,6 +252,12 @@ export default function PlayPage() {
       return;
     }
 
+    // Si le timer est à zéro et ce n'est pas un resolve, bloquer
+    if (remainingSeconds === 0 && action !== "Resolve") {
+      setError("Cycle terminé : il faut d'abord résoudre (Resolve) avant toute autre action.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -415,11 +421,14 @@ export default function PlayPage() {
               <div className="action-grid">
                 {ACTION_BUTTONS.map(([action, body]) => {
                   const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
+                  // Désactive toutes les actions sauf Resolve si le timer est à zéro
+                  const isResolve = action === "Resolve";
+                  const disabled = loading || !sessionWallet || !programId || (remainingSeconds === 0 && !isResolve);
                   return (
                     <button
                       key={action}
                       onClick={() => handleAction(action as keyof typeof ACTION_COSTS | "Resolve")}
-                      disabled={loading || !sessionWallet || !programId}
+                      disabled={disabled}
                     >
                       <strong>{action}</strong>
                       <small>{body}</small>
@@ -427,6 +436,12 @@ export default function PlayPage() {
                     </button>
                   );
                 })}
+                {/* Message explicite si le cycle est à résoudre */}
+                {remainingSeconds === 0 && (
+                  <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500}}>
+                    Cycle terminé : cliquez sur <b>Resolve</b> pour passer au suivant !
+                  </div>
+                )}
               </div>
             </article>
           </div>
