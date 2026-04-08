@@ -158,13 +158,16 @@ export default function PlayPage() {
 
         // 6. Statut du cycle (gagné/perdu)
         if (nextVault && sessionWallet) {
-          if (secondsLeft === 0 && !isNewCycle) {
+          // Seulement afficher le statut si un cycle vient de se terminer (leader existe encore)
+          const cycleActive = nextVault.leader !== "11111111111111111111111111111111";
+          if (secondsLeft === 0 && cycleActive && !isNewCycle) {
             if (nextVault.leader === sessionWallet.publicKey.toBase58()) {
               setCycleStatus("Cycle gagné ! 🎉");
             } else {
               setCycleStatus("Cycle perdu.");
             }
-          } else {
+          } else if (!cycleActive) {
+            // Pas de cycle actif, clear le statut
             setCycleStatus("");
           }
         } else {
@@ -293,8 +296,9 @@ export default function PlayPage() {
       return;
     }
 
-    // Si le timer est à zéro et ce n'est pas un resolve, bloquer
-    if (remainingSeconds === 0 && action !== "Resolve") {
+    // Si le timer est à zéro ET qu'un leader existe ET ce n'est pas un deposit, bloquer
+    const cycleActive = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
+    if (remainingSeconds === 0 && cycleActive && action !== "Resolve" && action !== "Deposit") {
       setError("Cycle terminé : il faut d'abord résoudre (Resolve) avant toute autre action.");
       return;
     }
@@ -498,8 +502,14 @@ export default function PlayPage() {
               <div className="action-grid">
                 {ACTION_BUTTONS.filter(([action]) => action !== "Resolve").map(([action, body]) => {
                   const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
-                  // Désactive toutes les actions si timer=0 ou resolve en cours
-                  const disabled = loading || autoResolving || !sessionWallet || !programId || remainingSeconds === 0;
+                  // Désactive les actions si:
+                  // - Loading ou auto-resolving
+                  // - Pas de session wallet ou program ID
+                  // - Timer=0 ET leader existe (cycle terminé, besoin de resolve)
+                  // MAIS: Deposit est toujours autorisé si pas de leader (pour démarrer un nouveau cycle)
+                  const cycleActive = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
+                  const cycleEnded = remainingSeconds === 0 && cycleActive;
+                  const disabled = loading || autoResolving || !sessionWallet || !programId || (cycleEnded && action !== "Deposit");
                   return (
                     <button
                       key={action}
