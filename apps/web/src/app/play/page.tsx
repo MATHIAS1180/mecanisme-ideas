@@ -46,12 +46,16 @@ export default function PlayPage() {
   const refreshLiveRef = useRef<() => void>(() => {});
   // Auto-resolve : dès que le timer arrive à zéro, on envoie l'instruction automatiquement
   useEffect(() => {
-    if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet) {
+    // Ne pas auto-resolve si:
+    // - Pas de vault
+    // - Pas de leader (cycle pas commencé)
+    // - Déjà en train de résoudre
+    if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet && vault && vault.leader && vault.leader !== "11111111111111111111111111111111") {
       setAutoResolving(true);
       (async () => {
         try {
           setNotice("Résolution du cycle en cours...");
-          const leader = vault?.leader ? new PublicKey(vault.leader) : sessionWallet.publicKey;
+          const leader = new PublicKey(vault.leader);
           const expiry = BigInt((await connection.getSlot()) + 90);
           const instruction = buildActionInstruction({
             action: "Resolve",
@@ -342,14 +346,25 @@ export default function PlayPage() {
         <div className="play-grid">
           {/* Graphique principal */}
           <div className="play-main">
-            <CycleGraph
-              remainingSeconds={remainingSeconds}
-              maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
-              pressure={vault ? Number(vault.pressureCount) : 0}
-              pot={pot}
-              leader={shortenAddress(vault?.leader || "Waiting...")}
-              isActive={remainingSeconds > 0}
-            />
+            {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
+              <CycleGraph
+                remainingSeconds={remainingSeconds}
+                maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
+                pressure={vault ? Number(vault.pressureCount) : 0}
+                pot={pot}
+                leader={shortenAddress(vault?.leader || "Waiting...")}
+                isActive={remainingSeconds > 0}
+              />
+            ) : (
+              <div className="cycle-graph">
+                <div className="cycle-graph__empty">
+                  <div className="cycle-graph__empty-icon">🎮</div>
+                  <h3>Aucun cycle actif</h3>
+                  <p>Sois le premier à démarrer un nouveau cycle!</p>
+                  <p className="muted">Clique sur &quot;Deposit&quot; pour prendre le leadership et démarrer le timer.</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="stack">
@@ -447,21 +462,24 @@ export default function PlayPage() {
                 <strong>{programId ? shortenAddress(programId.toBase58(), 8) : "Missing"}</strong>
               </div>
               <div className="detail-row">
-                <span>Vault init</span>
-                <strong>{vault ? "Detected" : "Pending"}</strong>
+                <span>Vault status</span>
+                <strong>{vault?.initialized ? "✅ Ready" : "⚠️ Not initialized"}</strong>
+              </div>
+              <div className="detail-row">
+                <span>Current cycle</span>
+                <strong>#{vault ? String(vault.cycleNumber) : "-"}</strong>
               </div>
               <div className="detail-row">
                 <span>Latest signature</span>
                 <strong>{latestSignature ? shortenAddress(latestSignature, 8) : "None yet"}</strong>
               </div>
-              <div className="button-row">
-                <button className="button button--secondary" onClick={handleInitialize} disabled={loading || !connected || !programId}>
-                  Initialize vault
-                </button>
-                <Link href="/docs" className="button button--secondary">
-                  Review operator docs
-                </Link>
-              </div>
+              {!vault?.initialized && (
+                <div className="button-row">
+                  <button className="button button--secondary" onClick={handleInitialize} disabled={loading || !connected || !programId}>
+                    Initialize vault
+                  </button>
+                </div>
+              )}
             </article>
 
             <article className="metric-board">

@@ -769,3 +769,52 @@ input {
     grid-column: 1 / -1;
   }
 }
+
+/* ========================================
+   Cycle Graph Empty State
+   ======================================== */
+
+.cycle-graph__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 3rem;
+  text-align: center;
+  gap: 1rem;
+}
+
+.cycle-graph__empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.cycle-graph__empty h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.cycle-graph__empty p {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0.5rem 0;
+  max-width: 400px;
+}
+
+.cycle-graph__empty p.muted {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+}
