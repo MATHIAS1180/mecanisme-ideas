@@ -5,9 +5,10 @@ import { startTransition, useEffect, useState, useRef } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
-import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, type NodusVault } from "@nodus/sdk";
+import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
+import { CycleGraph } from "../../components/cycle-graph";
 
 const ACTION_BUTTONS = [
   ["Deposit", "Take leadership and reset the timer."],
@@ -76,27 +77,28 @@ export default function PlayPage() {
         }
       })();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingSeconds, autoResolving, programId, sessionWallet, vault, connection]);
 
-  // Timer et données live : tout est recalculé à chaque tick (500ms)
+  // Timer et données live : tout est recalculé à chaque tick (2s)
   useEffect(() => {
     let active = true;
     let poller: number | null = null;
     let pauseTimeout: number | null = null;
 
     async function refreshLive() {
-        // Expose la fonction pour l'auto-resolve
-        refreshLiveRef.current = refreshLive;
+      // Expose la fonction pour l'auto-resolve
+      refreshLiveRef.current = refreshLive;
       if (!programId) return;
-      // Si le timer est à zéro ET que le timerStartSlot/cycleNumber n'a pas changé, ne poll pas (évite le spam)
-      if (vault && remainingSeconds === 0 && lastTimerStart === vault.timerStartSlot && lastCycleNumber === vault.cycleNumber) return;
+      
       try {
         // 1. Vault (leader, slots...)
         const nextVault = await fetchVault(connection, programId);
         if (!active) return;
+        
+        // Détecte si c'est un nouveau cycle
+        const isNewCycle = nextVault && vault && nextVault.cycleNumber !== vault.cycleNumber;
+        
         setVault(nextVault);
-        // Mémorise le timerStartSlot et cycleNumber pour détecter le nouveau cycle
         setLastTimerStart(nextVault ? nextVault.timerStartSlot : null);
         setLastCycleNumber(nextVault ? nextVault.cycleNumber : null);
 
@@ -142,7 +144,7 @@ export default function PlayPage() {
 
         // 6. Statut du cycle (gagné/perdu)
         if (nextVault && sessionWallet) {
-          if (secondsLeft === 0) {
+          if (secondsLeft === 0 && !isNewCycle) {
             if (nextVault.leader === sessionWallet.publicKey.toBase58()) {
               setCycleStatus("Cycle gagné ! 🎉");
             } else {
@@ -153,6 +155,12 @@ export default function PlayPage() {
           }
         } else {
           setCycleStatus("");
+        }
+        
+        // Si nouveau cycle détecté, clear les messages
+        if (isNewCycle) {
+          setNotice(null);
+          setAutoResolving(false);
         }
       } catch (err) {
         if (!active) return;
@@ -174,13 +182,14 @@ export default function PlayPage() {
       }
     }
 
+    refreshLive(); // Premier appel immédiat
     poller = window.setInterval(refreshLive, 2000);
     return () => {
       active = false;
       if (poller) window.clearInterval(poller);
       if (pauseTimeout) window.clearTimeout(pauseTimeout);
     };
-  }, [connection, programId, sessionWallet, remainingSeconds]);
+  }, [connection, programId, sessionWallet, vault]);
 
 
 
@@ -331,9 +340,25 @@ export default function PlayPage() {
 
       <section className="section shell">
         <div className="play-grid">
+          {/* Graphique principal */}
+          <div className="play-main">
+            <CycleGraph
+              remainingSeconds={remainingSeconds}
+              maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
+              pressure={vault ? Number(vault.pressureCount) : 0}
+              pot={pot}
+              leader={shortenAddress(vault?.leader || "Waiting...")}
+              isActive={remainingSeconds > 0}
+            />
+          </div>
+
           <div className="stack">
             <article className="terminal">
               <p className="eyebrow">Cycle telemetry</p>
+              <div className="terminal__row">
+                <span className="terminal__label">Cycle #</span>
+                <strong className="terminal__value">{vault ? String(vault.cycleNumber) : "-"}</strong>
+              </div>
               <div className="terminal__row">
                 <span className="terminal__label">Leader</span>
                 <strong className="terminal__value">{shortenAddress(vault?.leader || "Live")}</strong>
@@ -351,19 +376,19 @@ export default function PlayPage() {
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Pressure</span>
-                <strong className="terminal__value">{vault ? String(vault.pressureCount) : "-"}</strong>
+                <strong className="terminal__value">{vault ? String(vault.pressureCount) : "-"} / 40</strong>
               </div>
               <div className="terminal__row">
-                <span className="terminal__label">Reset floor</span>
-                <strong className="terminal__value">~{Math.floor(MIN_RESET_SLOTS * 0.45)}s</strong>
+                <span className="terminal__label">Terminal lock</span>
+                <strong className="terminal__value">{vault?.terminalLock ? "🔒 ACTIVE" : "Inactive"}</strong>
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Carry-over</span>
                 <strong className="terminal__value">{vault ? `${formatSolFromLamports(vault.carryOverLamports)} SOL` : "0.0000 SOL"}</strong>
               </div>
               <div className="terminal__row">
-                <span className="terminal__label">Fee wallet</span>
-                <strong className="terminal__value">{shortenAddress(FEE_WALLET)}</strong>
+                <span className="terminal__label">Curses</span>
+                <strong className="terminal__value">{vault ? `${vault.curseCount} / 5` : "0 / 5"}</strong>
               </div>
               {cycleStatus && (
                 <div className="terminal__row">

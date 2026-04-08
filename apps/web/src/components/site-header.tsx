@@ -5,7 +5,6 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 const nav = [
   ["Play", "/play"],
-  ["Docs", "/docs"],
   ["History", "/history"],
   ["FAQ", "/faq"],
   ["About", "/about"],

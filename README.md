@@ -1,77 +1,72 @@
 # Nodus Protocol
 
-Nodus Protocol est un protocole de redistribution on-chain sur Solana, déployé d'abord sur devnet, avec une interface web pensée pour Vercel et une expérience de type terminal financier.
+Nodus Protocol is a deterministic on-chain coordination protocol on Solana devnet.
 
-La source de vérité fonctionnelle du mécanisme est WHITEPAPER.md. Ce dépôt contient la base de développement complète : application web, SDK TypeScript et programme Solana natif.
+## What is Nodus?
+
+Nodus is a live cycle where participants compete for leadership through timing and strategic actions. The last participant holding leadership when the timer expires wins the redistribution. Every action is visible on-chain, costs a fixed entry, and affects the cycle dynamics through the pressure system.
+
+## Core Mechanics
+
+- **Fixed Entry:** 0.01 SOL per action (devnet)
+- **Pressure System:** Accumulates with each action, compressing future timer resets
+- **Terminal Lock:** At pressure 40, no more paid actions accepted - cycle must resolve
+- **Redistribution:** Winner receives 98% of pot minus curses, 2% protocol fee
+- **Carry-over:** Up to 5% of pot can carry to next cycle via curse mechanic
+
+## Special Actions
+
+- **Deposit:** Take leadership, reset timer (1 entry)
+- **Shield:** Leader-only, block deposits temporarily (1 entry)
+- **Sabotage:** Non-leader, halve remaining time (1 entry, max 2/wallet)
+- **Anchor:** Leader-only, reset to max time (2 entries, max 2/cycle)
+- **Curse:** Reduce winner payout, add to next cycle (1 entry, max 5/cycle)
+- **Blizzard:** Add to pot without leadership (1 entry)
+- **ArmSnipe:** Trap next deposit (1 entry, 60s expiry)
+
+## Session Wallet
+
+The protocol uses a session wallet system for smooth UX:
+1. Fund a session wallet once from your main wallet
+2. All cycle actions are signed locally by the session wallet
+3. No popup for each action
+4. Sweep remaining balance back to main wallet anytime
+
+## Getting Started
+
+1. Connect Phantom or Solflare wallet
+2. Fund a session wallet with your chosen budget
+3. Open the terminal at `/play`
+4. Take actions during active cycles
+
+## Network
+
+- **Cluster:** Solana devnet
+- **Program ID:** Set via environment variable
+- **RPC:** Devnet public RPC
+- **Wallets:** Phantom, Solflare
+
+## Important Notes
+
+- This is a **devnet beta** - all SOL is devnet SOL (no real value)
+- Every action is an on-chain transaction
+- Outcomes are deterministic, not random
+- No external oracles or off-chain dependencies
+
+## Documentation
+
+- `WHITEPAPER.md` - Original specification
+- `volta_whitepaper_v2.md` - Complete V2 specification with all mechanics
+- `/faq` - Frequently asked questions
+- `/about` - Protocol overview
 
 ## Stack
 
-- Frontend : Next.js, React, TypeScript
-- Wallets : Phantom, Solflare
-- Réseau : Solana devnet
-- Programme : Rust natif avec solana-program uniquement côté on-chain
-- Déploiement web : Vercel
+- Frontend: Next.js 15, React 19, TypeScript
+- Program: Rust native (solana-program)
+- SDK: TypeScript (@nodus/sdk)
+- Wallets: Solana wallet adapter
 
-## Structure
+## License
 
-- WHITEPAPER.md : spécification fonctionnelle et économique
-- docs/DEPLOY_DEVNET.md : procédure de déploiement devnet et wiring du program id
-- apps/web : application Next.js
-- packages/sdk : constantes protocole, PDA, codecs et helpers d'instructions
-- programs/nodus : programme Solana natif
-
-## Paramètres V1 figés
-
-- Nom : Nodus Protocol
-- Entrée fixe : 0.01 SOL
-- Fee protocole : 2 %
-- Wallet fee : FC2km6B1ub8fBf4FdLFs1hbJjmLx6EJbdAzN9Ajnb8nt
-- Timer minimum cible : 15 secondes en devnet
-- Wallet de session : obligatoire pour une UX acceptable
-
-## Démarrage local
-
-Installer les dépendances puis lancer le frontend :
-
-```bash
-npm install
-npm run dev
-```
-
-Build de validation :
-
-```bash
-npm run build
-```
-
-## Déploiement devnet
-
-Voir docs/DEPLOY_DEVNET.md.
-
-Scripts utiles :
-
-- npm run deploy:devnet : build et déploie le programme sur devnet depuis une machine équipée du Solana CLI
-- npm run web:env:devnet -- <PROGRAM_ID> : écrit apps/web/.env.local avec le program id et le RPC devnet
-
-Variables publiques utilisées par le web :
-
-- NEXT_PUBLIC_SOLANA_RPC_URL
-- NEXT_PUBLIC_NODUS_PROGRAM_ID
-
-## Programme Solana
-
-Le programme est développé en Rust natif sous programs/nodus. L'environnement Rust et le Solana CLI doivent être présents pour compiler et déployer sur devnet.
-
-## Objectif produit
-
-Le protocole ne doit pas ressembler à un casino. Toute l'UX, les textes et les composants sont cadrés comme un outil de coordination financière on-chain : pression, leadership, timer, cycle, redistribution et protocol fee.
-
-## État du repo
-
-Le repo contient déjà :
-
-- une base frontend responsive complète
-- un terminal /play branché pour passer du mode preview au mode devnet réel via le program id
-- un SDK TypeScript partagé
-- un programme Solana natif aligné sur la V1 du whitepaper
-- une procédure de déploiement devnet prête à l'emploi
+See repository for license information.

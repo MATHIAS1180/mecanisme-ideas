@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { features, homepageStats, timeline } from "../lib/site";
+import { features, homepageStats } from "../lib/site";
 import { useEffect, useState } from "react";
 import { fetchVault, getProgramId } from "../lib/nodus-client";
 import { Connection, PublicKey } from "@solana/web3.js";
@@ -63,14 +63,14 @@ export default function HomePage() {
             <h1>Pressure becomes market structure.</h1>
             <p>
               Nodus Protocol turns timing, pressure and visible conviction into a deterministic on-chain cycle.
-              No oracle. No randomness. No casino framing. Just a live terminal built for devnet first.
+              No oracle. No randomness. No casino framing.
             </p>
             <div className="hero-actions">
               <Link href="/play" className="button button--primary">
                 Open terminal
               </Link>
-              <Link href="/docs" className="button button--secondary">
-                Read the operating model
+              <Link href="/faq" className="button button--secondary">
+                How it works
               </Link>
             </div>
           </div>
@@ -93,11 +93,11 @@ export default function HomePage() {
 
       <section className="section shell">
         <div className="page-title">
-          <p className="eyebrow">Why this product exists</p>
-          <h2>Built as a market terminal, not a toy.</h2>
+          <p className="eyebrow">Core mechanics</p>
+          <h2>Built as a market terminal.</h2>
           <p>
-            Nodus is framed around leadership, timer compression, pressure and redistribution. The interface uses
-            financial language end to end so the product stays aligned with the whitepaper and your positioning.
+            Nodus is framed around leadership, timer compression, pressure and redistribution. 
+            Every action is deterministic and visible on-chain.
           </p>
         </div>
         <div className="card-grid">
@@ -122,14 +122,14 @@ export default function HomePage() {
             </p>
             <ul className="docs-list">
               <li>Entry unit fixed at 0.01 SOL.</li>
-              <li>2% protocol fee to the hard-coded wallet on settlement.</li>
+              <li>2% protocol fee on settlement.</li>
               <li>Up to 5 active curses produce carry-over into the next cycle.</li>
               <li>Terminal lock guarantees finitude.</li>
             </ul>
           </article>
 
           <article className="metric-board">
-            <h3>Launch profile</h3>
+            <h3>Network</h3>
             <div className="metric-row">
               <span>Cluster</span>
               <strong>Solana devnet</strong>
@@ -139,30 +139,10 @@ export default function HomePage() {
               <strong>Session keypair</strong>
             </div>
             <div className="metric-row">
-              <span>Frontend deployment</span>
-              <strong>Vercel</strong>
-            </div>
-            <div className="metric-row">
               <span>Primary wallets</span>
               <strong>Phantom / Solflare</strong>
             </div>
           </article>
-        </div>
-      </section>
-
-      <section className="section shell">
-        <div className="page-title">
-          <p className="eyebrow">Build path</p>
-          <h2>Whitepaper first. Devnet execution second.</h2>
-        </div>
-        <div className="docs-grid">
-          {timeline.map((item) => (
-            <article key={item.phase} className="timeline-item">
-              <p className="eyebrow">{item.phase}</p>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
-            </article>
-          ))}
         </div>
       </section>
     </>

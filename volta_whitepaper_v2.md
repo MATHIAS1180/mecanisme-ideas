@@ -121,9 +121,9 @@ Ces paramètres sont figés pour le design et l'implémentation initiale. Ils po
 
 ### 5.1 Entrée fixe
 
-**Entrée standard : 0.1 SOL**
+**Entrée standard : 0.01 SOL**
 
-Raisons du choix : équité entre participants, résistance naturelle aux baleines, lisibilité du risque, facilité de calcul dans l'interface, compatibilité avec des coups spéciaux tarifés en multiples simples.
+Raisons du choix : équité entre participants, résistance naturelle aux baleines, lisibilité du risque, facilité de calcul dans l'interface, compatibilité avec des coups spéciaux tarifés en multiples simples. Le montant de 0.01 SOL est adapté pour la phase devnet et permet une participation accessible tout en maintenant un engagement économique réel.
 
 ### 5.2 Distribution à la résolution
 
@@ -145,21 +145,21 @@ gain gagnant      = pot brut − fee protocole − carry-over
 
 **Exemples complets :**
 
-Cycle simple — 5 deposits à 0.1 SOL :
-- Pot brut : 0.5 SOL
-- Fee protocole : 0.01 SOL
-- Gagnant : 0.49 SOL
+Cycle simple — 5 deposits à 0.01 SOL :
+- Pot brut : 0.05 SOL
+- Fee protocole : 0.001 SOL
+- Gagnant : 0.049 SOL
 
 Cycle avec 1 anchor et 2 curses — 8 deposits + 1 anchor + 2 curses :
-- 8 × 0.1 = 0.8 SOL + 0.2 SOL (anchor) + 0.2 SOL (curses) = **1.2 SOL**
-- Fee protocole : 0.024 SOL
-- Carry-over : 0.024 SOL
-- Gagnant : **1.152 SOL**
+- 8 × 0.01 = 0.08 SOL + 0.02 SOL (anchor) + 0.02 SOL (curses) = **0.12 SOL**
+- Fee protocole : 0.0024 SOL
+- Carry-over : 0.0024 SOL
+- Gagnant : **0.1152 SOL**
 
 Cycle avec snipe déclenché :
-- Pot avant snipe : 1.0 SOL
-- Escrow sniper : 0.1 SOL, deposit adversaire : 0.1 SOL → les deux entrent dans le pot
-- Pot brut : **1.2 SOL**, leadership : sniper (pas le déposant)
+- Pot avant snipe : 0.1 SOL
+- Escrow sniper : 0.01 SOL, deposit adversaire : 0.01 SOL → les deux entrent dans le pot
+- Pot brut : **0.12 SOL**, leadership : sniper (pas le déposant)
 
 ---
 
@@ -302,7 +302,7 @@ La résolution est possible lorsque :
 **Intention :** le leader verrouille temporairement l'accès aux prises de leadership sans arrêter le temps.
 
 **Coûts et limites :**
-- coût : 1 entrée (0.1 SOL) ;
+- coût : 1 entrée (0.01 SOL) ;
 - pression : +1 ;
 - usage : 1 fois par wallet et par cycle (`shield_used = true` dans `UserState`) ;
 - condition : uniquement le leader (`signer == leader`) ;
@@ -323,7 +323,7 @@ La résolution est possible lorsque :
 **Intention :** un participant non-leader paie pour couper brutalement le temps restant du leader.
 
 **Coûts et limites :**
-- coût : 1 entrée (0.1 SOL) ;
+- coût : 1 entrée (0.01 SOL) ;
 - pression : +1 ;
 - usage : 2 fois maximum par wallet et par cycle (`sabotage_used_count <= 2`) ;
 - condition : interdit au leader (`signer != leader`) ;
@@ -346,7 +346,7 @@ La résolution est possible lorsque :
 **Intention :** le leader paie cher pour racheter du temps et relancer une fenêtre plus longue, sans effacer la pression déjà accumulée.
 
 **Coûts et limites :**
-- coût : 2 entrées (0.2 SOL) ;
+- coût : 2 entrées (0.02 SOL) ;
 - pression : +2 ;
 - usage : 1 fois par wallet et **2 fois maximum au total par cycle** (`anchor_count <= 2`) ;
 - condition : uniquement le leader (`signer == leader`) ;
@@ -405,7 +405,7 @@ La résolution est possible lorsque :
 **Intention :** un participant paie pour diminuer la part du futur gagnant sans modifier la course au leadership.
 
 **Coûts et limites :**
-- coût : 1 entrée (0.1 SOL) ;
+- coût : 1 entrée (0.01 SOL) ;
 - pression : +1 ;
 - usage : 1 fois par wallet et par cycle (`curse_used = true`) ;
 - limite globale : **5 malédictions par cycle** (`curse_count <= 5`) ;
@@ -423,7 +423,7 @@ La résolution est possible lorsque :
 **Intention :** un participant ajoute de la valeur au pot et augmente la pression sans prendre le leadership.
 
 **Coûts et limites :**
-- coût : 1 entrée (0.1 SOL) ;
+- coût : 1 entrée (0.01 SOL) ;
 - pression : +1 ;
 - pas de limite stricte autre que le cooldown ;
 - indisponible en `terminal_lock`.
@@ -1092,18 +1092,18 @@ Identité on-chain par adresse : afficher dans l'interface le "rank" de chaque w
 ### 22.2 Constantes programme V1 (à figurer dans le code)
 
 ```rust
-pub const ENTRY_LAMPORTS: u64 = 100_000_000;        // 0.1 SOL
+pub const ENTRY_LAMPORTS: u64 = 10_000_000;         // 0.01 SOL
 pub const PROTOCOL_FEE_BPS: u16 = 200;              // 2 %
 pub const MAX_CURSES: u8 = 5;
 pub const MAX_ANCHOR_GLOBAL: u8 = 2;
-pub const SHIELD_DURATION_SLOTS: u64 = 24;          // ~12 s à 500 ms/slot
+pub const SHIELD_DURATION_SLOTS: u64 = 30;          // ~15 s à 500 ms/slot
 pub const SNIPE_TTL_SLOTS: u64 = 120;               // ~60 s
-pub const TIMER_MIN_SLOTS: u64 = 30;                // ~15 s (plancher)
-pub const TIMER_MAX_SLOTS: u64 = 360;               // ~180 s
+pub const TIMER_MIN_SLOTS: u64 = 38;                // ~19 s (plancher)
+pub const TIMER_MAX_SLOTS: u64 = 450;               // ~225 s
 pub const PRESSURE_TERMINAL_FLOOR: u64 = 34;        // timer bloqué au plancher
 pub const PRESSURE_TERMINAL_LOCK: u64 = 40;         // plus aucune action
 pub const SOLO_RESOLVE_DELAY_SLOTS: u64 = 60;       // ~30 s si unique déposant
-pub const PRESSURE_STEP_SECONDS: u64 = 5;           // 5 s de réduction par unité de pression
+pub const RESET_DECAY_SLOTS: u64 = 12;              // 12 slots de réduction par unité de pression
 ```
 
 ### 22.3 Ce qu'il ne faut pas promettre sur devnet
