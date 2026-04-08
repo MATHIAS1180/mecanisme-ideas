@@ -2,6 +2,12 @@
 
 Nodus Protocol is a deterministic on-chain coordination protocol on Solana devnet.
 
+## 🎮 Live on Devnet
+
+**Program ID:** `5jtFgAFEeHn7Y7Qh5gS5axc8gWVPRnuekFey1P4cee2x`  
+**Network:** Solana Devnet  
+**RPC:** https://api.devnet.solana.com
+
 ## What is Nodus?
 
 Nodus is a live cycle where participants compete for leadership through timing and strategic actions. The last participant holding leadership when the timer expires wins the redistribution. Every action is visible on-chain, costs a fixed entry, and affects the cycle dynamics through the pressure system.
