@@ -366,7 +366,7 @@ export default function PlayPage() {
       </section>
 
       <section className="section shell">
-        <div className="play-grid">
+        <div className="play-container">
           {/* Graphique principal */}
           <div className="play-main">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
@@ -390,7 +390,7 @@ export default function PlayPage() {
             )}
           </div>
 
-          <div className="stack">
+          <div className="play-sidebar">
             <article className="terminal">
               <p className="eyebrow">Cycle telemetry</p>
               <div className="terminal__row">
@@ -458,54 +458,21 @@ export default function PlayPage() {
                 <span>Mise en cours</span>
                 <strong>{userStake} SOL</strong>
               </div>
-              <div className="session-row">
-                <span>RPC</span>
-                <strong>{shortenAddress(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || DEFAULT_RPC_URL, 8)}</strong>
-              </div>
               <p style={{ fontSize: '0.85em', color: '#888', marginTop: '8px', marginBottom: '12px' }}>
                 💡 Minimum recommandé: 0.03 SOL (couvre rent + plusieurs actions)
               </p>
               <div className="button-row">
                 <label className="input-shell">
-                  <span>Session budget</span>
+                  <span>Budget</span>
                   <input value={budget} onChange={(event) => setBudget(event.target.value)} inputMode="decimal" />
                 </label>
                 <button className="button button--primary" onClick={handleFundSession} disabled={loading}>
-                  Fund session
+                  Fund
                 </button>
                 <button className="button button--secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>
-                  Sweep remainder
+                  Sweep
                 </button>
               </div>
-            </article>
-          </div>
-
-          <div className="stack">
-            <article className="metric-board">
-              <h3>Program controls</h3>
-              <div className="detail-row">
-                <span>Program ID</span>
-                <strong>{programId ? shortenAddress(programId.toBase58(), 8) : "Missing"}</strong>
-              </div>
-              <div className="detail-row">
-                <span>Vault status</span>
-                <strong>{vault?.initialized ? "✅ Ready" : "⚠️ Not initialized"}</strong>
-              </div>
-              <div className="detail-row">
-                <span>Current cycle</span>
-                <strong>#{vault ? String(vault.cycleNumber) : "-"}</strong>
-              </div>
-              <div className="detail-row">
-                <span>Latest signature</span>
-                <strong>{latestSignature ? shortenAddress(latestSignature, 8) : "None yet"}</strong>
-              </div>
-              {!vault?.initialized && (
-                <div className="button-row">
-                  <button className="button button--secondary" onClick={handleInitialize} disabled={loading || !connected || !programId}>
-                    Initialize vault
-                  </button>
-                </div>
-              )}
             </article>
 
             <article className="metric-board">
@@ -534,36 +501,13 @@ export default function PlayPage() {
                   );
                 })}
                 {autoResolving && (
-                  <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500}}>
+                  <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500, gridColumn: '1 / -1', textAlign: 'center'}}>
                     Résolution automatique du cycle en cours...
                   </div>
                 )}
               </div>
             </article>
           </div>
-        </div>
-      </section>
-
-      <section className="section shell">
-        <div className="dual-grid">
-          <article className="copy-block">
-            <p className="eyebrow">What to do next</p>
-            <h2>From preview mode to live devnet</h2>
-            <p>
-              The site is already wired to use a real program ID once deployed. Until then, the terminal still acts as a
-              complete front-end shell with session wallet flows, action builders, docs and responsive marketing pages.
-            </p>
-            <ul className="docs-list">
-              <li>Deploy the program and expose NEXT_PUBLIC_NODUS_PROGRAM_ID.</li>
-              <li>Use a premium devnet RPC if you want tighter live action latency.</li>
-              <li>Keep session budgets bounded and sweep the remainder when done.</li>
-            </ul>
-          </article>
-
-          <article className="metric-board">
-            <h3>Recent cycles (live)</h3>
-            <div className="history-row">Aucun historique on-chain disponible pour le moment.</div>
-          </article>
         </div>
       </section>
     </>
