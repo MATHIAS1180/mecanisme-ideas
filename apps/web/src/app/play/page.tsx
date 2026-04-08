@@ -507,7 +507,7 @@ export default function PlayPage() {
                   // - Pas de session wallet ou program ID
                   // - Timer=0 ET leader existe (cycle terminé, besoin de resolve)
                   // MAIS: Deposit est toujours autorisé si pas de leader (pour démarrer un nouveau cycle)
-                  const cycleActive = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
+                  const cycleActive = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
                   const cycleEnded = remainingSeconds === 0 && cycleActive;
                   const disabled = loading || autoResolving || !sessionWallet || !programId || (cycleEnded && action !== "Deposit");
                   return (
