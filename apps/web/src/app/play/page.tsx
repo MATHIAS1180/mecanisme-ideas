@@ -48,9 +48,18 @@ export default function PlayPage() {
   useEffect(() => {
     // Ne pas auto-resolve si:
     // - Pas de vault
-    // - Pas de leader (cycle pas commencé)
+    // - Pas de leader (cycle pas commencé ou déjà résolu)
     // - Déjà en train de résoudre
-    if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet && vault && vault.leader && vault.leader !== "11111111111111111111111111111111") {
+    // - Leader est l'adresse par défaut (11111...1)
+    if (
+      remainingSeconds === 0 && 
+      !autoResolving && 
+      programId && 
+      sessionWallet && 
+      vault && 
+      vault.leader && 
+      vault.leader !== "11111111111111111111111111111111"
+    ) {
       setAutoResolving(true);
       (async () => {
         try {
@@ -69,15 +78,16 @@ export default function PlayPage() {
           transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
           transaction.sign(sessionWallet);
           await connection.sendRawTransaction(transaction.serialize());
-          setNotice("Cycle résolu, nouveau cycle en cours.");
+          setNotice("Cycle résolu ! Nouveau cycle prêt.");
+          setError(null);
           // Forcer un refresh immédiat après resolve
           setTimeout(() => {
             if (refreshLiveRef.current) refreshLiveRef.current();
-          }, 1200);
+          }, 1500);
         } catch (err) {
           setError("Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
         } finally {
-          setTimeout(() => setAutoResolving(false), 2000);
+          setTimeout(() => setAutoResolving(false), 2500);
         }
       })();
     }
@@ -161,10 +171,12 @@ export default function PlayPage() {
           setCycleStatus("");
         }
         
-        // Si nouveau cycle détecté, clear les messages
+        // Si nouveau cycle détecté, clear les messages et états
         if (isNewCycle) {
           setNotice(null);
+          setError(null);
           setAutoResolving(false);
+          setCycleStatus("");
         }
       } catch (err) {
         if (!active) return;
@@ -310,9 +322,8 @@ export default function PlayPage() {
       // Si c'est un resolve, force un refresh immédiat pour afficher le nouveau cycle
       if (action === "Resolve") {
         setTimeout(() => {
-          // On force le polling à rafraîchir tout de suite
-          window.location.reload(); // solution simple pour forcer le refresh complet
-        }, 1200);
+          if (refreshLiveRef.current) refreshLiveRef.current();
+        }, 1500);
       }
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : `${String(action)} failed.`);

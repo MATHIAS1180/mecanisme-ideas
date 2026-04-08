@@ -4,21 +4,34 @@
 
 ## 🐛 Problèmes Résolus
 
-### 1. Erreur 0x1788 (NoLeader) lors de l'auto-resolve ✅
+### 1. Erreur 0x1788 (NoLeader) - Cycle bloqué après résolution ✅
 
-**Problème:** Le cycle essayait de se résoudre automatiquement même quand aucun joueur n'avait pris le leadership (vault.leader == Pubkey::default()).
+**Problème:** Le cycle restait bloqué après résolution avec l'erreur `0x1788` (NoLeader). L'auto-resolve essayait de résoudre un cycle vide.
 
-**Cause:** L'auto-resolve se déclenchait dès que `remainingSeconds === 0` sans vérifier si un cycle était actif.
+**Cause Racine:** 
+1. Après un `Resolve`, le smart contract reset `vault.leader = Pubkey::default()` (adresse vide)
+2. L'UI continuait à essayer d'auto-resolve même quand `leader == "11111111111111111111111111111111"`
+3. Le smart contract retourne l'erreur `NoLeader` (0x1788) car il n'y a pas de gagnant à payer
 
-**Solution:**
+**Solution Complète:**
+
 ```typescript
-// Avant
-if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet)
-
-// Après
-if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet && 
-    vault && vault.leader && vault.leader !== "11111111111111111111111111111111")
+// Condition stricte pour l'auto-resolve
+if (
+  remainingSeconds === 0 && 
+  !autoResolving && 
+  programId && 
+  sessionWallet && 
+  vault && 
+  vault.leader && 
+  vault.leader !== "11111111111111111111111111111111"  // ← Vérification critique
+)
 ```
+
+**Logique du Cycle:**
+1. **Cycle actif:** `vault.leader != Pubkey::default()` → Timer actif, auto-resolve possible
+2. **Après resolve:** `vault.leader = Pubkey::default()` → Retour à l'état vide, pas d'auto-resolve
+3. **Nouveau cycle:** Un joueur fait `Deposit` → `vault.leader` est assigné, nouveau cycle démarre
 
 ### 2. Bouton "Initialize vault" toujours visible ✅
 
@@ -35,6 +48,20 @@ if (remainingSeconds === 0 && !autoResolving && programId && sessionWallet &&
 - Message clair: "Aucun cycle actif"
 - Instructions: "Sois le premier à démarrer un nouveau cycle!"
 - Indication: "Clique sur Deposit pour prendre le leadership"
+
+### 4. Messages d'erreur persistants entre cycles ✅
+
+**Problème:** Les messages d'erreur et de statut restaient affichés après le début d'un nouveau cycle.
+
+**Solution:** Clear automatique de tous les états lors de la détection d'un nouveau cycle:
+```typescript
+if (isNewCycle) {
+  setNotice(null);
+  setError(null);
+  setAutoResolving(false);
+  setCycleStatus("");
+}
+```
 
 ## 🎨 Améliorations UX
 
@@ -61,40 +88,65 @@ Le lien vers `/docs` (qui n'existe plus) a été supprimé.
 
 ## 📋 Logique du Jeu Clarifiée
 
+### Comprendre le Cycle de Vie
+
+**Le vault n'a besoin d'être initialisé qu'UNE SEULE FOIS.** Après ça, les cycles s'enchaînent automatiquement sans réinitialisation.
+
 ### Cycle de vie d'un cycle:
 
-1. **État initial:** Vault initialisé, aucun leader
-   - `vault.leader == Pubkey::default()`
-   - `vault.cycleNumber == 1`
-   - UI affiche l'état vide
+1. **État initial (après Initialize ou après Resolve):**
+   - `vault.initialized = true` ✅
+   - `vault.leader = Pubkey::default()` (adresse vide: "11111111111111111111111111111111")
+   - `vault.timer_start_slot = 0`
+   - `vault.timer_reset_slots = 0`
+   - `vault.cycle_number` incrémente à chaque resolve
+   - UI affiche l'état vide avec l'icône flottante
 
-2. **Premier deposit:** Un joueur prend le leadership
-   - `vault.leader = joueur.publicKey`
+2. **Premier deposit (démarrage du cycle):**
+   - Un joueur clique sur "Deposit" et paie 0.01 SOL
+   - `vault.leader = joueur.publicKey` ← Leader assigné
    - `vault.timer_start_slot = current_slot`
-   - `vault.timer_reset_slots = 450` (max)
-   - Le graphique s'anime
+   - `vault.timer_reset_slots = 450` (max = ~3 minutes)
+   - `vault.pressure_count = 1`
+   - Le graphique s'anime et le timer démarre
 
 3. **Actions pendant le cycle:**
-   - Deposit: Change le leader, reset le timer
-   - Shield: Bloque les deposits temporairement
-   - Sabotage: Divise le temps restant par 2
-   - Anchor: Reset le timer au max (2 entrées)
-   - Curse: Réduit le gain du gagnant
-   - Blizzard: Ajoute au pot sans prendre leadership
-   - ArmSnipe: Piège le prochain deposit
+   - **Deposit:** Change le leader, reset le timer (0.01 SOL)
+   - **Shield:** Leader-only, bloque les deposits 30 slots (0.01 SOL)
+   - **Sabotage:** Non-leader, divise le temps restant par 2 (0.01 SOL)
+   - **Anchor:** Leader-only, reset le timer au max (0.02 SOL = 2 entrées)
+   - **Curse:** Réduit le gain du gagnant de 1% (0.01 SOL)
+   - **Blizzard:** Ajoute au pot sans prendre leadership (0.01 SOL)
+   - **ArmSnipe:** Piège le prochain deposit (0.01 SOL en escrow)
 
-4. **Fin du cycle:** Timer arrive à 0
-   - Si `vault.leader != Pubkey::default()`: Auto-resolve
-   - Gagnant reçoit: 98% du pot - (curse_count%)
-   - Protocole reçoit: 2%
-   - Carry-over: curse_count% → cycle suivant
+4. **Fin du cycle (timer = 0):**
+   - **Condition:** `current_slot >= vault.timer_start_slot + vault.timer_reset_slots`
+   - **Auto-resolve:** Si `vault.leader != Pubkey::default()`, l'UI envoie automatiquement `Resolve`
+   - **Pas d'auto-resolve:** Si `vault.leader == Pubkey::default()`, rien ne se passe (cycle vide)
 
-5. **Après resolve:** Nouveau cycle
-   - `vault.leader = Pubkey::default()` (reset)
-   - `vault.cycle_number += 1`
-   - `vault.pressure_count = 0`
-   - `vault.carry_over_lamports` conservé
-   - Retour à l'état initial
+5. **Resolve (distribution des gains):**
+   - Gagnant reçoit: `pot * (98% - curse_count%)`
+   - Protocole reçoit: `pot * 2%`
+   - Carry-over: `pot * curse_count%` → cycle suivant
+   - **Reset du vault:**
+     ```rust
+     vault.leader = Pubkey::default();  // ← Retour à l'état vide
+     vault.timer_start_slot = 0;
+     vault.timer_reset_slots = 0;
+     vault.pressure_count = 0;
+     vault.terminal_lock = false;
+     vault.shield_expires_slot = 0;
+     vault.anchor_count = 0;
+     vault.curse_count = 0;
+     vault.cycle_number += 1;  // ← Nouveau cycle
+     vault.carry_over_lamports = carry;  // ← Conservé
+     ```
+
+6. **Après resolve (nouveau cycle prêt):**
+   - Retour à l'état initial (étape 1)
+   - Le vault reste initialisé
+   - Prêt pour un nouveau deposit
+   - Carry-over disponible pour le prochain gagnant
 
 ## 🔧 Pas besoin d'initialiser à chaque cycle
 
@@ -153,25 +205,68 @@ NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 
 ## ✅ Tests à Effectuer
 
-1. **Vault vide:**
+1. **Vault vide (aucun cycle actif):**
    - ✅ Affiche l'état vide avec icône animée
    - ✅ Pas d'auto-resolve
    - ✅ Bouton Initialize visible seulement si nécessaire
+   - ✅ Message: "Aucun cycle actif"
 
 2. **Premier deposit:**
    - ✅ Le graphique s'affiche
    - ✅ Le timer démarre
    - ✅ La pression augmente
+   - ✅ Leader affiché correctement
 
 3. **Fin de cycle:**
-   - ✅ Auto-resolve quand timer = 0
+   - ✅ Auto-resolve quand timer = 0 ET leader existe
    - ✅ Gagnant reçoit les SOL
    - ✅ Nouveau cycle démarre automatiquement
+   - ✅ Pas d'erreur 0x1788
 
 4. **Nouveau cycle:**
    - ✅ Retour à l'état vide
    - ✅ Prêt pour un nouveau deposit
    - ✅ Carry-over affiché si présent
+   - ✅ Messages d'erreur précédents effacés
+
+## 🔍 Troubleshooting
+
+### Erreur 0x1788 (NoLeader)
+
+**Symptôme:** "Error processing Instruction 0: custom program error: 0x1788"
+
+**Cause:** L'instruction `Resolve` a été appelée alors qu'aucun leader n'existe (`vault.leader == Pubkey::default()`).
+
+**Solution:** Cette erreur ne devrait plus apparaître grâce à la vérification dans l'auto-resolve. Si elle persiste:
+1. Vérifie que le code UI contient bien la condition `vault.leader !== "11111111111111111111111111111111"`
+2. Vérifie que le vault est bien initialisé
+3. Vérifie qu'un joueur a bien fait un deposit avant que le timer n'expire
+
+### Cycle "bloqué"
+
+**Symptôme:** Le cycle semble bloqué, rien ne se passe.
+
+**Diagnostic:**
+1. Vérifie `vault.leader`:
+   - Si `"11111111111111111111111111111111"` → Cycle vide, besoin d'un deposit
+   - Si autre adresse → Cycle actif
+2. Vérifie `remainingSeconds`:
+   - Si > 0 → Cycle en cours
+   - Si = 0 et leader existe → Auto-resolve devrait se déclencher
+   - Si = 0 et pas de leader → État normal (cycle vide)
+
+**Solution:** Clique sur "Deposit" pour démarrer un nouveau cycle.
+
+### Timer ne se met pas à jour
+
+**Symptôme:** Le timer reste figé après un resolve.
+
+**Cause:** Le polling RPC peut être ralenti ou le vault n'est pas encore mis à jour on-chain.
+
+**Solution:** 
+1. Attends 2-3 secondes (le polling se fait toutes les 2 secondes)
+2. Vérifie que tu n'as pas d'erreur 429 (trop de requêtes RPC)
+3. Si le problème persiste, rafraîchis la page
 
 ## 🎉 Résultat
 
