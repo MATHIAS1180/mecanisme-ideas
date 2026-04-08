@@ -5,7 +5,7 @@ import { startTransition, useEffect, useState, useRef } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
-import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, type NodusVault } from "@nodus/sdk";
+import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, ENTRY_LAMPORTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { CycleGraph } from "../../components/cycle-graph";
@@ -25,7 +25,7 @@ export default function PlayPage() {
   const { connection } = useConnection();
   const { connected, publicKey, sendTransaction } = useWallet();
   const [sessionWallet, setSessionWallet] = useState(() => loadSessionWallet());
-  const [budget, setBudget] = useState("0.01");
+  const [budget, setBudget] = useState("0.03");
   const [vault, setVault] = useState<NodusVault | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,7 +242,7 @@ export default function PlayPage() {
     setError(null);
     try {
       const wallet = sessionWallet ?? createSessionWallet();
-      const lamports = Math.max(0.01, Number(budget || "0.01")) * 1_000_000_000;
+      const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
       const transaction = await buildFundSessionTransaction({
         connection,
         owner: publicKey,
@@ -293,6 +293,14 @@ export default function PlayPage() {
   async function handleAction(action: keyof typeof ACTION_COSTS | "Resolve") {
     if (!programId || !sessionWallet) {
       setError("Program ID and funded session wallet are required before sending cycle actions.");
+      return;
+    }
+
+    // Vérifier le solde du session wallet avant l'action
+    const sessionBalance = await connection.getBalance(sessionWallet.publicKey);
+    const actionCost = action === "Resolve" ? 0 : (action in ACTION_COSTS ? ACTION_COSTS[action as keyof typeof ACTION_COSTS] : ENTRY_LAMPORTS);
+    if (sessionBalance < actionCost) {
+      setError(`Solde insuffisant dans le session wallet. Besoin: ${formatSolFromLamports(actionCost)} SOL, Disponible: ${formatSolFromLamports(sessionBalance)} SOL. Clique sur "Fund session" pour ajouter des SOL.`);
       return;
     }
 
@@ -454,6 +462,9 @@ export default function PlayPage() {
                 <span>RPC</span>
                 <strong>{shortenAddress(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || DEFAULT_RPC_URL, 8)}</strong>
               </div>
+              <p style={{ fontSize: '0.85em', color: '#888', marginTop: '8px', marginBottom: '12px' }}>
+                💡 Minimum recommandé: 0.03 SOL (couvre rent + plusieurs actions)
+              </p>
               <div className="button-row">
                 <label className="input-shell">
                   <span>Session budget</span>
