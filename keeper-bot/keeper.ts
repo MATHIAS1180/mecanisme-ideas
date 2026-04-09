@@ -19,6 +19,7 @@ const CHECK_INTERVAL = 5000; // Check every 5 seconds
 const VAULT_SEED = Buffer.from("vault");
 
 // Decode vault from account data
+// IMPORTANT: Order must match VaultState in state.rs!
 function decodeVault(data: Buffer) {
   let offset = 0;
   
@@ -26,11 +27,11 @@ function decodeVault(data: Buffer) {
   const initialized = data.readUInt8(offset) === 1;
   offset += 1;
   
-  // Read protocol_fee_bps (2 bytes)
-  const protocolFeeBps = data.readUInt16LE(offset);
-  offset += 2;
+  // Read leader (32 bytes) - BEFORE protocol_fee_bps!
+  const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+  offset += 32;
   
-  // Read leader (32 bytes)
+  // Read leader (32 bytes) - BEFORE protocol_fee_bps!
   const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
   offset += 32;
   
@@ -50,6 +51,10 @@ function decodeVault(data: Buffer) {
   const pressureCount = data.readBigUInt64LE(offset);
   offset += 8;
   
+  // Read cycle_number (8 bytes)
+  const cycleNumber = data.readBigUInt64LE(offset);
+  offset += 8;
+  
   // Read terminal_lock (1 byte)
   const terminalLock = data.readUInt8(offset) === 1;
   offset += 1;
@@ -58,13 +63,21 @@ function decodeVault(data: Buffer) {
   const shieldExpiresSlot = data.readBigUInt64LE(offset);
   offset += 8;
   
-  // Read anchor_count (4 bytes)
-  const anchorCount = data.readUInt32LE(offset);
-  offset += 4;
+  // Read anchor_count (1 byte) - u8 not u32!
+  const anchorCount = data.readUInt8(offset);
+  offset += 1;
   
-  // Read curse_count (4 bytes)
-  const curseCount = data.readUInt32LE(offset);
-  offset += 4;
+  // Read curse_count (1 byte) - u8 not u32!
+  const curseCount = data.readUInt8(offset);
+  offset += 1;
+  
+  // Read carry_over_lamports (8 bytes)
+  const carryOverLamports = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read carry_over_lamports (8 bytes)
+  const carryOverLamports = data.readBigUInt64LE(offset);
+  offset += 8;
   
   // Read active_snipe_wallet (32 bytes)
   const activeSnipeWallet = new PublicKey(data.slice(offset, offset + 32)).toBase58();
@@ -72,6 +85,14 @@ function decodeVault(data: Buffer) {
   
   // Read active_snipe_expiry_slot (8 bytes)
   const activeSnipeExpirySlot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read protocol_fee_bps (2 bytes) - AFTER snipe fields!
+  const protocolFeeBps = data.readUInt16LE(offset);
+  offset += 2;
+  
+  // Read active_snipe_escrow_lamports (8 bytes)
+  const activeSnipeEscrowLamports = data.readBigUInt64LE(offset);
   offset += 8;
   
   // Read active_snipe_escrow_lamports (8 bytes)
@@ -94,35 +115,27 @@ function decodeVault(data: Buffer) {
   const lastCyclePressure = data.readBigUInt64LE(offset);
   offset += 8;
   
-  // Read carry_over_lamports (8 bytes)
-  const carryOverLamports = data.readBigUInt64LE(offset);
-  offset += 8;
-  
-  // Read cycle_number (8 bytes)
-  const cycleNumber = data.readBigUInt64LE(offset);
-  offset += 8;
-  
   return {
     initialized,
-    protocolFeeBps,
     leader,
     leaderSinceSlot,
     timerStartSlot,
     timerResetSlots,
     pressureCount,
+    cycleNumber,
     terminalLock,
     shieldExpiresSlot,
     anchorCount,
     curseCount,
+    carryOverLamports,
     activeSnipeWallet,
     activeSnipeExpirySlot,
+    protocolFeeBps,
     activeSnipeEscrowLamports,
     lastResolvedWinner,
     lastResolvedPayout,
     lastCyclePot,
     lastCyclePressure,
-    carryOverLamports,
-    cycleNumber,
   };
 }
 

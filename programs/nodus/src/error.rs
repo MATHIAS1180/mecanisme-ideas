@@ -11,6 +11,7 @@ pub enum NodusError {
     CooldownActive = 6006,
     TerminalLockActive = 6007,
     TimerNotExpired = 6008,
+    TimerExpired = 6029,
     ResolveRequired = 6009,
     NotLeader = 6010,
     LeaderOnlyAction = 6011,
