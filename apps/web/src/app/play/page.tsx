@@ -375,7 +375,7 @@ export default function PlayPage() {
         ) : null}
         {programId && vault === null && !loading ? (
           <div className="notice notice--warning">
-            ⚠️ Le vault n'est pas initialisé. Clique sur le bouton ci-dessous pour l'initialiser (une seule fois).
+            ⚠️ Le vault n&apos;est pas initialisé. Clique sur le bouton ci-dessous pour l&apos;initialiser (une seule fois).
             <button 
               className="button button--primary" 
               onClick={handleInitialize} 
