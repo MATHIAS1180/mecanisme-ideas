@@ -8,7 +8,7 @@ import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../li
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, ENTRY_LAMPORTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { CycleGraphEnhanced } from "../../components/cycle-graph-enhanced";
+import { CycleGraphPro } from "../../components/cycle-graph-pro";
 import { WinnerNotification } from "../../components/winner-notification";
 
 const ACTION_BUTTONS = [
@@ -402,7 +402,7 @@ export default function PlayPage() {
           {/* Graphique principal */}
           <div className="play-main">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
-              <CycleGraphEnhanced
+              <CycleGraphPro
                 remainingSeconds={remainingSeconds}
                 maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
                 pressure={vault ? Number(vault.pressureCount) : 0}

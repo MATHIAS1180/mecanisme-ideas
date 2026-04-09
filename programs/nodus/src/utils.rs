@@ -11,9 +11,9 @@ use crate::error::NodusError;
 
 pub const ENTRY_LAMPORTS: u64 = 10_000_000;
 pub const ANCHOR_LAMPORTS: u64 = ENTRY_LAMPORTS * 2;
-pub const MAX_RESET_SLOTS: u64 = 450;
-pub const MIN_RESET_SLOTS: u64 = 38;
-pub const RESET_DECAY_SLOTS: u64 = 12;
+pub const MAX_RESET_SLOTS: u64 = 100; // ~45 secondes (100 * 0.45s)
+pub const MIN_RESET_SLOTS: u64 = 20;  // ~9 secondes minimum
+pub const RESET_DECAY_SLOTS: u64 = 3; // Decay plus rapide
 pub const TERMINAL_LOCK_PRESSURE: u64 = 40;
 pub const SHIELD_DURATION_SLOTS: u64 = 30;
 pub const USER_COOLDOWN_BASE_SLOTS: u64 = 3;
