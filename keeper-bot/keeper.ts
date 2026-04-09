@@ -28,7 +28,8 @@ function decodeVault(data: Buffer) {
   offset += 1;
   
   // Read leader (32 bytes)
-  const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+  const leaderPubkey = new PublicKey(data.slice(offset, offset + 32));
+  const leader = leaderPubkey.toBase58();
   offset += 32;
   
   // Read leader_since_slot (8 bytes)
@@ -68,7 +69,8 @@ function decodeVault(data: Buffer) {
   offset += 1;
   
   // Read carry_over_lamports (8 bytes)
-  const carryOverLamports = data.readBigUInt64LE(offset);
+  const carryOverLamportsValue = data.readBigUInt64LE(offset);
+  const carryOverLamports = carryOverLamportsValue;
   offset += 8;
   
   // Read active_snipe_wallet (32 bytes)
@@ -84,7 +86,8 @@ function decodeVault(data: Buffer) {
   offset += 2;
   
   // Read active_snipe_escrow_lamports (8 bytes)
-  const activeSnipeEscrowLamports = data.readBigUInt64LE(offset);
+  const activeSnipeEscrowLamportsValue = data.readBigUInt64LE(offset);
+  const activeSnipeEscrowLamports = activeSnipeEscrowLamportsValue;
   offset += 8;
   
   // Read last_resolved_winner (32 bytes)
