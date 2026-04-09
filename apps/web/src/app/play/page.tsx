@@ -107,7 +107,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // ⏱️ Timer update continu (toutes les secondes)
+  // ⏱️ Timer update continu + AUTO-RESOLVE automatique
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
@@ -121,18 +121,24 @@ export default function PlayPage() {
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
         
-        // 🚨 DÉTECTION CYCLE BLOQUÉ: Si timer à 0 depuis >5s, force refresh
-        if (secondsLeft === 0 && remainingSeconds === 0) {
+        // 🚨 AUTO-RESOLVE: Si timer à 0 depuis >3s ET session wallet disponible
+        if (secondsLeft === 0 && remainingSeconds === 0 && sessionWallet) {
           const now = Date.now();
           if (!lastZeroTimeRef.current) {
             lastZeroTimeRef.current = now;
-          } else if (now - lastZeroTimeRef.current > 5000) {
-            // Timer à 0 depuis >5s = cycle probablement bloqué
-            console.warn("⚠️ Cycle bloqué détecté (timer à 0 depuis >5s), force refresh...");
-            if (realtimeVaultRef.current) {
-              realtimeVaultRef.current.refresh(true); // Force refresh!
-            }
-            lastZeroTimeRef.current = now; // Reset pour éviter spam
+          } else if (now - lastZeroTimeRef.current > 3000 && !loading) {
+            // Timer à 0 depuis >3s = envoyer un Deposit pour trigger auto-resolve
+            console.log("⚡ AUTO-RESOLVE: Envoi Deposit automatique pour résoudre le cycle...");
+            lastZeroTimeRef.current = now + 10000; // Éviter spam (10s cooldown)
+            
+            // Envoyer Deposit en arrière-plan (va trigger auto-resolve dans smart contract)
+            handleAction("Deposit").catch(err => {
+              console.error("❌ Auto-resolve failed:", err);
+              // Retry dans 5s
+              setTimeout(() => {
+                lastZeroTimeRef.current = Date.now() - 2000; // Reset pour retry
+              }, 5000);
+            });
           }
         } else if (secondsLeft > 0) {
           // Reset le compteur si timer > 0
@@ -152,7 +158,7 @@ export default function PlayPage() {
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [vault, connection, remainingSeconds]);
+  }, [vault, connection, remainingSeconds, sessionWallet, loading]);
 
   // 💾 CACHE STRATEGY: Fetch données secondaires UNIQUEMENT après actions utilisateur
   // Pas de polling automatique pour économiser RPC
@@ -252,7 +258,58 @@ export default function PlayPage() {
     }
   }
 
-  async function handleSweepSession() {
+  async function handleResolve() {
+    if (!programId || !publicKey || !sendTransaction) {
+      setError("Connect your main wallet to resolve the cycle.");
+      return;
+    }
+
+    if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
+      setError("No active cycle to resolve.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const leader = new PublicKey(vault.leader);
+      const feeWallet = new PublicKey(FEE_WALLET);
+      
+      const instruction = buildActionInstruction({
+        action: "Resolve",
+        programId,
+        signer: publicKey,
+        leader,
+        snipeExpirySlot: BigInt(0),
+      });
+      
+      const transaction = new Transaction().add(instruction);
+      transaction.feePayer = publicKey;
+      
+      const { blockhash } = await connection.getLatestBlockhash("finalized");
+      transaction.recentBlockhash = blockhash;
+      
+      const signature = await sendTransaction(transaction, connection, {
+        skipPreflight: false,
+        maxRetries: 2,
+      });
+      
+      setLatestSignature(signature);
+      setNotice("✅ Cycle résolu! Nouveau cycle en cours...");
+      
+      // Force refresh après 1s
+      setTimeout(() => {
+        realtimeVaultRef.current?.refresh(true);
+      }, 1000);
+      
+    } catch (resolveError: any) {
+      const errorMessage = resolveError instanceof Error ? resolveError.message : String(resolveError);
+      setError(`❌ Erreur Resolve: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  }
     if (!sessionWallet || !publicKey) {
       setError("No active session wallet found.");
       return;
@@ -471,27 +528,6 @@ Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
                 <strong className="terminal__value">
                   {formatCountdown(remainingSeconds)}
                 </strong>
-                {remainingSeconds === 0 && vault?.leader && vault.leader !== "11111111111111111111111111111111" && (
-                  <button 
-                    onClick={() => {
-                      console.log("🔄 Manual refresh requested (FORCE)");
-                      realtimeVaultRef.current?.refresh(true); // Force refresh!
-                    }}
-                    style={{ 
-                      marginLeft: 8, 
-                      padding: '2px 8px', 
-                      fontSize: '0.75em',
-                      background: 'rgba(140, 245, 197, 0.1)',
-                      border: '1px solid rgba(140, 245, 197, 0.3)',
-                      borderRadius: 4,
-                      color: '#8cf5c5',
-                      cursor: 'pointer'
-                    }}
-                    title="Rafraîchir si le cycle semble bloqué"
-                  >
-                    🔄 Refresh
-                  </button>
-                )}
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Pot</span>
