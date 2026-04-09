@@ -42,28 +42,8 @@ export default function PlayPage() {
   const [showWinnerNotification, setShowWinnerNotification] = useState(false);
   const [winnerData, setWinnerData] = useState<{ winner: string; payout: string } | null>(null);
   
-  // 🎯 DYNAMIC LAYOUT: Calculate available height
-  const [viewportHeight, setViewportHeight] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
-
-  // 🎯 Calculate viewport height dynamically
-  useEffect(() => {
-    const updateHeight = () => {
-      const vh = window.innerHeight;
-      const headerHeight = 80; // Approximate header height
-      const titleHeight = 200; // Approximate title section height
-      const footerHeight = 60; // Approximate footer height
-      const availableHeight = vh - headerHeight - titleHeight - footerHeight;
-      setViewportHeight(availableHeight);
-    };
-
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
 
   // WebSocket setup
   useEffect(() => {
@@ -357,75 +337,44 @@ export default function PlayPage() {
     }
   }
 
-  // Calculate dynamic heights based on viewport
-  const chartHeight = Math.max(300, Math.min(500, viewportHeight * 0.5));
-  const sidebarHeight = viewportHeight - 40;
-
   return (
     <>
-      <section className="page-title shell">
-        <p className="eyebrow">Play terminal</p>
+      <section className="page-title-compact shell">
         <h1>Operate the live cycle.</h1>
       </section>
 
-      {!programId && (
-        <section className="section section--tight shell">
-          <div className="notice notice--warning">
-            ⚠️ Aucun program ID configuré.
-          </div>
-        </section>
-      )}
-      
-      {programId && vault === null && !loading && (
-        <section className="section section--tight shell">
+      <section className="section shell">
+        {!programId && (
+          <div className="notice notice--warning">⚠️ Aucun program ID configuré.</div>
+        )}
+        
+        {programId && vault === null && !loading && (
           <div className="notice notice--warning">
             ⚠️ Le vault n&apos;est pas initialisé.
             <button 
               className="button button--primary" 
               onClick={handleInitialize} 
               disabled={!connected || loading}
-              style={{marginTop: '1rem', display: 'block'}}
+              style={{marginTop: '0.5rem'}}
             >
               🚀 Initialize Vault
             </button>
           </div>
-        </section>
-      )}
+        )}
 
-      {notice && (
-        <section className="section section--tight shell">
-          <div className="notice notice--success">{notice}</div>
-        </section>
-      )}
-      
-      {error && (
-        <section className="section section--tight shell">
-          <div className="notice notice--danger">{error}</div>
-        </section>
-      )}
-      
-      {latestSignature && (
-        <section className="section section--tight shell">
+        {notice && <div className="notice notice--success">{notice}</div>}
+        {error && <div className="notice notice--danger">{error}</div>}
+        {latestSignature && (
           <div className="notice notice--info">
             🔗 <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer">
               {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
             </a>
           </div>
-        </section>
-      )}
+        )}
 
-      <section className="section shell">
-        <div 
-          ref={containerRef}
-          className="play-container-dynamic" 
-          style={{ 
-            height: `${viewportHeight}px`,
-            maxHeight: `${viewportHeight}px`,
-            overflow: 'hidden'
-          }}
-        >
+        <div className="play-grid-compact">
           {/* Chart */}
-          <div className="play-chart-area" style={{ height: `${chartHeight}px` }}>
+          <div className="play-chart-compact">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
               <CryptoChart
                 remainingSeconds={remainingSeconds}
@@ -446,62 +395,59 @@ export default function PlayPage() {
             )}
           </div>
 
-          {/* Controls Grid */}
-          <div className="play-controls-grid" style={{ height: `${sidebarHeight - chartHeight}px` }}>
-            {/* Telemetry */}
-            <div className="control-card">
-              <h3>📊 Telemetry</h3>
-              <div className="compact-stats">
-                <div><span>Cycle</span><strong>{vault ? String(vault.cycleNumber) : "-"}</strong></div>
-                <div><span>Leader</span><strong>{shortenAddress(vault?.leader || "Live")}</strong></div>
-                <div><span>Timer</span><strong>{formatCountdown(remainingSeconds)}</strong></div>
-                <div><span>Pot</span><strong>{pot} SOL</strong></div>
-                <div><span>Pressure</span><strong>{vault ? String(vault.pressureCount) : "-"}/40</strong></div>
-              </div>
+          {/* Telemetry */}
+          <div className="control-card">
+            <h3>📊 Telemetry</h3>
+            <div className="compact-stats">
+              <div><span>Cycle</span><strong>{vault ? String(vault.cycleNumber) : "-"}</strong></div>
+              <div><span>Leader</span><strong>{shortenAddress(vault?.leader || "Live")}</strong></div>
+              <div><span>Timer</span><strong>{formatCountdown(remainingSeconds)}</strong></div>
+              <div><span>Pot</span><strong>{pot} SOL</strong></div>
+              <div><span>Pressure</span><strong>{vault ? String(vault.pressureCount) : "-"}/40</strong></div>
             </div>
+          </div>
 
-            {/* Wallet */}
-            <div className="control-card">
-              <h3>💳 Wallet</h3>
-              <div className="compact-stats">
-                <div><span>Main</span><strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong></div>
-                <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
-                <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
-              </div>
-              <div className="wallet-actions">
-                <input 
-                  type="text" 
-                  value={budget} 
-                  onChange={(e) => setBudget(e.target.value)} 
-                  placeholder="0.03"
-                  className="compact-input"
-                />
-                <button className="btn-compact btn-primary" onClick={handleFundSession} disabled={loading}>Fund</button>
-                <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
-              </div>
+          {/* Wallet */}
+          <div className="control-card">
+            <h3>💳 Wallet</h3>
+            <div className="compact-stats">
+              <div><span>Main</span><strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong></div>
+              <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
+              <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
             </div>
+            <div className="wallet-actions">
+              <input 
+                type="text" 
+                value={budget} 
+                onChange={(e) => setBudget(e.target.value)} 
+                placeholder="0.03"
+                className="compact-input"
+              />
+              <button className="btn-compact btn-primary" onClick={handleFundSession} disabled={loading}>Fund</button>
+              <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
+            </div>
+          </div>
 
-            {/* Actions */}
-            <div className="control-card actions-card">
-              <h3>⚡ Actions</h3>
-              <div className="actions-compact-grid">
-                {ACTION_BUTTONS.map(([action, desc, emoji]) => {
-                  const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
-                  return (
-                    <button
-                      key={action}
-                      onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
-                      disabled={loading || !sessionWallet || !programId}
-                      className="action-btn-compact"
-                      title={desc}
-                    >
-                      <span className="action-emoji">{emoji}</span>
-                      <span className="action-name">{action}</span>
-                      <span className="action-cost">{cost}</span>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Actions */}
+          <div className="control-card actions-card-full">
+            <h3>⚡ Actions</h3>
+            <div className="actions-compact-grid">
+              {ACTION_BUTTONS.map(([action, desc, emoji]) => {
+                const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
+                return (
+                  <button
+                    key={action}
+                    onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
+                    disabled={loading || !sessionWallet || !programId}
+                    className="action-btn-compact"
+                    title={desc}
+                  >
+                    <span className="action-emoji">{emoji}</span>
+                    <span className="action-name">{action}</span>
+                    <span className="action-cost">{cost}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

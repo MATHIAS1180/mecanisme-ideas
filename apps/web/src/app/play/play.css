@@ -1,38 +1,77 @@
 /* ============================================
-   DYNAMIC VIEWPORT-BASED LAYOUT
-   Calcule la hauteur disponible et ajuste tout
+   COMPACT GRID LAYOUT - NO SCROLL
    ============================================ */
 
-.play-container-dynamic {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 100%;
-  padding: 0.5rem;
+.page-title-compact {
+  padding: 1rem 0 0.5rem;
 }
 
-/* Chart area */
-.play-chart-area {
+.page-title-compact h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+/* Main grid */
+.play-grid-compact {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+/* Mobile: Stack everything */
+@media (max-width: 767px) {
+  .play-grid-compact {
+    grid-template-columns: 1fr;
+  }
+  
+  .play-chart-compact {
+    height: 250px;
+  }
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .play-grid-compact {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .play-chart-compact {
+    grid-column: span 2;
+    height: 300px;
+  }
+  
+  .actions-card-full {
+    grid-column: span 2;
+  }
+}
+
+/* Desktop: 3 columns */
+@media (min-width: 1024px) {
+  .play-grid-compact {
+    grid-template-columns: 1fr 1fr 1.5fr;
+    grid-template-rows: auto auto;
+  }
+  
+  .play-chart-compact {
+    grid-column: span 3;
+    height: 350px;
+  }
+}
+
+/* Large desktop: bigger chart */
+@media (min-width: 1440px) {
+  .play-chart-compact {
+    height: 400px;
+  }
+}
+
+/* Chart */
+.play-chart-compact {
   width: 100%;
   background: rgba(10, 31, 26, 0.4);
   border: 1px solid rgba(140, 245, 197, 0.2);
   border-radius: 8px;
   overflow: hidden;
-}
-
-/* Controls grid - 3 cards side by side on desktop, stacked on mobile */
-.play-controls-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
-  overflow-y: auto;
-}
-
-@media (min-width: 768px) {
-  .play-controls-grid {
-    grid-template-columns: 1fr 1fr 1.5fr;
-  }
 }
 
 /* Control cards */
@@ -149,27 +188,22 @@
   cursor: not-allowed;
 }
 
-/* Actions card */
-.actions-card {
-  grid-column: span 1;
-}
-
-@media (min-width: 768px) {
-  .actions-card {
-    grid-column: span 1;
-  }
-}
-
-/* Actions compact grid */
+/* Actions grid */
 .actions-compact-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .actions-compact-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .actions-compact-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -300,69 +334,4 @@
 .notice a {
   color: inherit;
   text-decoration: underline;
-}
-
-/* Scrollbar */
-.play-controls-grid::-webkit-scrollbar {
-  width: 4px;
-}
-
-.play-controls-grid::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.play-controls-grid::-webkit-scrollbar-thumb {
-  background: rgba(140, 245, 197, 0.3);
-  border-radius: 2px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 767px) {
-  .play-container-dynamic {
-    padding: 0.4rem;
-    gap: 0.5rem;
-  }
-
-  .control-card {
-    padding: 0.6rem;
-  }
-
-  .control-card h3 {
-    font-size: 0.7rem;
-  }
-
-  .compact-stats span {
-    font-size: 0.65rem;
-  }
-
-  .compact-stats strong {
-    font-size: 0.7rem;
-  }
-
-  .actions-compact-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .action-emoji {
-    font-size: 1rem;
-  }
-
-  .action-name {
-    font-size: 0.6rem;
-  }
-
-  .action-cost {
-    font-size: 0.55rem;
-  }
-}
-
-@media (min-width: 1920px) {
-  .play-container-dynamic {
-    max-width: 1800px;
-    margin: 0 auto;
-  }
-
-  .actions-compact-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
