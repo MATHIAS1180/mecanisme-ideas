@@ -16,47 +16,75 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(Date.now());
+  const lastRemainingRef = useRef<number>(remainingSeconds);
 
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);
 
-  // Générer courbe: monte de 0 à pot, puis descend avec le timer - JUSQU'AU TEMPS ACTUEL
+  // Reset start time when remainingSeconds changes
+  useEffect(() => {
+    if (remainingSeconds !== lastRemainingRef.current) {
+      startTimeRef.current = Date.now();
+      lastRemainingRef.current = remainingSeconds;
+    }
+  }, [remainingSeconds]);
+
+  // Générer courbe: monte de 0 à pot, puis descend avec le timer - SMOOTH 120 FPS
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
       return;
     }
 
-    const elapsed = maxSeconds - remainingSeconds;
-    const progress = Math.min(elapsed / maxSeconds, 1);
+    let animFrame: number;
     
-    const points: number[] = [];
-    const numPoints = 60;
-    
-    // Générer points seulement jusqu'au temps actuel
-    const currentPointIndex = Math.floor(progress * numPoints);
-    
-    for (let i = 0; i <= currentPointIndex; i++) {
-      const t = i / numPoints;
+    const updateCurve = () => {
+      // Calculer le temps écoulé depuis la dernière seconde avec interpolation
+      const now = Date.now();
+      const msSinceLastSecond = (now - startTimeRef.current) % 1000;
+      const interpolatedRemaining = remainingSeconds - (msSinceLastSecond / 1000);
       
-      if (t <= 0.15) {
-        // Phase montée (15% du temps): 0 → potValue
-        const riseProgress = t / 0.15;
-        points.push(potValue * riseProgress);
-      } else {
-        // Phase descente (85% du temps): descend progressivement
-        const fallProgress = (t - 0.15) / 0.85;
-        const normalizedProgress = (progress - 0.15) / 0.85;
+      const elapsed = maxSeconds - interpolatedRemaining;
+      const progress = Math.min(Math.max(elapsed / maxSeconds, 0), 1);
+      
+      const points: number[] = [];
+      const numPoints = 60;
+      
+      // Générer points seulement jusqu'au temps actuel
+      const currentPointIndex = Math.floor(progress * numPoints);
+      
+      for (let i = 0; i <= currentPointIndex; i++) {
+        const t = i / numPoints;
         
-        if (fallProgress <= normalizedProgress) {
-          // Point dans le passé - calculer la valeur
-          const descendProgress = fallProgress;
-          points.push(potValue * (1 - descendProgress * 0.4));
+        if (t <= 0.15) {
+          // Phase montée (15% du temps): 0 → potValue
+          const riseProgress = t / 0.15;
+          points.push(potValue * riseProgress);
+        } else {
+          // Phase descente (85% du temps): descend progressivement
+          const fallProgress = (t - 0.15) / 0.85;
+          const normalizedProgress = (progress - 0.15) / 0.85;
+          
+          if (fallProgress <= normalizedProgress) {
+            // Point dans le passé - calculer la valeur
+            const descendProgress = fallProgress;
+            points.push(potValue * (1 - descendProgress * 0.4));
+          }
         }
       }
-    }
+      
+      setDataPoints(points);
+      animFrame = requestAnimationFrame(updateCurve);
+    };
+
+    updateCurve();
     
-    setDataPoints(points);
+    return () => {
+      if (animFrame) {
+        cancelAnimationFrame(animFrame);
+      }
+    };
   }, [remainingSeconds, maxSeconds, potValue, isActive]);
 
   // Animation 120 FPS
