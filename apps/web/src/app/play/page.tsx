@@ -1,5 +1,6 @@
 "use client";
 
+import "./play.css";
 import Link from "next/link";
 import { startTransition, useEffect, useState, useRef, useCallback } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
