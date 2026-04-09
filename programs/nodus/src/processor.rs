@@ -86,11 +86,16 @@ impl Processor {
     }
 
     fn process_deposit<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, true)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, true)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
 
         if vault.shield_expires_slot > slot {
             return Err(NodusError::ShieldActive.into());
@@ -135,11 +140,17 @@ impl Processor {
     }
 
     fn process_shield<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
+        
         if vault.leader != *signer.key {
             return Err(NodusError::LeaderOnlyAction.into());
         }
@@ -169,11 +180,17 @@ impl Processor {
     }
 
     fn process_sabotage<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
+        
         if vault.leader == *signer.key {
             return Err(NodusError::NonLeaderOnlyAction.into());
         }
@@ -206,11 +223,17 @@ impl Processor {
     }
 
     fn process_anchor<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
+        
         if vault.leader != *signer.key {
             return Err(NodusError::LeaderOnlyAction.into());
         }
@@ -245,11 +268,16 @@ impl Processor {
     }
 
     fn process_arm_snipe<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], expiry_slot: u64) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
 
         if expiry_slot <= slot {
             return Err(NodusError::InvalidExpiry.into());
@@ -297,11 +325,17 @@ impl Processor {
     }
 
     fn process_curse<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
+        
         if vault.curse_count >= MAX_CURSES {
             return Err(NodusError::CurseLimitReached.into());
         }
@@ -331,11 +365,16 @@ impl Processor {
     }
 
     fn process_blizzard<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-        let ActionContext { signer, vault_account, user_state_account, system_program_account, .. } =
+        let ActionContext { signer, vault_account, user_state_account, system_program_account, protocol_fee_wallet, leader_account } =
             Self::parse_action_accounts(accounts)?;
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
-        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        
+        // Vérifier si on doit auto-résoudre le cycle
+        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
+        if needs_auto_resolve {
+            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
+        }
 
         let mut user = Self::ensure_user_state(program_id, signer, user_state_account, system_program_account, vault.cycle_number)?;
         Self::sync_user_cycle(&mut user, vault.cycle_number);
@@ -511,7 +550,7 @@ impl Processor {
         Ok(())
     }
 
-    fn assert_cycle_can_accept_paid_action(vault: &VaultState, slot: u64, allow_empty_cycle: bool) -> ProgramResult {
+    fn assert_cycle_can_accept_paid_action(vault: &VaultState, slot: u64, allow_empty_cycle: bool) -> Result<bool, ProgramError> {
         if !vault.initialized {
             return Err(NodusError::VaultNotInitialized.into());
         }
@@ -521,10 +560,10 @@ impl Processor {
         if vault.leader == Pubkey::default() && !allow_empty_cycle {
             return Err(NodusError::CycleNotStarted.into());
         }
-        if vault.leader != Pubkey::default() && remaining_slots(slot, vault.timer_start_slot, vault.timer_reset_slots) == 0 {
-            return Err(NodusError::ResolveRequired.into());
-        }
-        Ok(())
+        // Si le timer est expiré et qu'il y a un leader, on doit auto-résoudre
+        let needs_auto_resolve = vault.leader != Pubkey::default() 
+            && remaining_slots(slot, vault.timer_start_slot, vault.timer_reset_slots) == 0;
+        Ok(needs_auto_resolve)
     }
 
     fn load_vault(vault_account: &AccountInfo, program_id: &Pubkey) -> Result<VaultState, ProgramError> {
@@ -562,6 +601,54 @@ impl Processor {
         **vault_account.try_borrow_mut_lamports()? = next_vault_balance;
         **target.try_borrow_mut_lamports()? = next_target_balance;
         Ok(())
+    }
+
+    fn auto_resolve_cycle(
+        vault_account: &AccountInfo<'_>,
+        protocol_fee_wallet: &AccountInfo<'_>,
+        leader_account: &AccountInfo<'_>,
+        mut vault: VaultState,
+    ) -> Result<VaultState, ProgramError> {
+        msg!("nodus: auto-resolving expired cycle");
+
+        let expected_fee_wallet = Pubkey::from_str(PROTOCOL_FEE_WALLET).map_err(|_| ProgramError::InvalidArgument)?;
+        if *protocol_fee_wallet.key != expected_fee_wallet {
+            return Err(NodusError::InvalidProtocolFeeWallet.into());
+        }
+        if *leader_account.key != vault.leader {
+            return Err(NodusError::InvalidLeaderAccount.into());
+        }
+
+        let rent_reserve = Rent::get()?.minimum_balance(VaultState::LEN);
+        let gross_pot = vault_account.lamports().saturating_sub(rent_reserve);
+        let protocol_fee = gross_pot.saturating_mul(vault.protocol_fee_bps as u64) / 10_000;
+        let carry = gross_pot.saturating_mul(vault.curse_count as u64) / 100;
+        let payout = gross_pot.saturating_sub(protocol_fee).saturating_sub(carry);
+
+        Self::debit_vault_credit_target(vault_account, leader_account, payout)?;
+        Self::debit_vault_credit_target(vault_account, protocol_fee_wallet, protocol_fee)?;
+
+        vault.last_resolved_winner = vault.leader;
+        vault.last_resolved_payout = payout;
+        vault.last_cycle_pot = gross_pot;
+        vault.last_cycle_pressure = vault.pressure_count;
+        vault.carry_over_lamports = carry;
+        vault.leader = Pubkey::default();
+        vault.leader_since_slot = 0;
+        vault.timer_start_slot = 0;
+        vault.timer_reset_slots = 0;
+        vault.pressure_count = 0;
+        vault.terminal_lock = false;
+        vault.shield_expires_slot = 0;
+        vault.anchor_count = 0;
+        vault.curse_count = 0;
+        vault.active_snipe_wallet = Pubkey::default();
+        vault.active_snipe_expiry_slot = 0;
+        vault.active_snipe_escrow_lamports = 0;
+        vault.cycle_number = checked_add(vault.cycle_number, 1)?;
+
+        msg!("nodus: cycle auto-resolved, new cycle #{}", vault.cycle_number);
+        Ok(vault)
     }
 }
 
