@@ -16,7 +16,7 @@ const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY; // Base58 encoded
 const CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 // Vault PDA
-const VAULT_SEED = Buffer.from("vault");
+const VAULT_SEED = Buffer.from("nodus_vault");
 
 // Decode vault from account data
 // IMPORTANT: Order must match VaultState in state.rs!
