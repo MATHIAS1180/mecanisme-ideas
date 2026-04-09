@@ -260,6 +260,33 @@ export default function PlayPage() {
 
     setLoading(true);
     setError(null);
+    
+    // 🚀 OPTIMISTIC UPDATE: Feedback instantané AVANT la confirmation on-chain
+    if (realtimeVaultRef.current && vault) {
+      const optimisticUpdates: Record<string, Partial<NodusVault>> = {
+        Deposit: {
+          leader: sessionWallet.publicKey.toBase58(),
+          timerStartSlot: vault.timerStartSlot, // Sera mis à jour par le smart contract
+        },
+        Shield: {
+          terminalLock: true,
+        },
+        Sabotage: {
+          // Timer sera réduit par le smart contract
+        },
+        Curse: {
+          curseCount: Math.min(5, vault.curseCount + 1),
+        },
+        Blizzard: {
+          pressureCount: Math.min(40, vault.pressureCount + 1),
+        },
+      };
+
+      if (action in optimisticUpdates) {
+        realtimeVaultRef.current.applyOptimisticUpdate(() => optimisticUpdates[action]);
+      }
+    }
+
     try {
       const actionLabel = String(action);
       const expiry = BigInt((await connection.getSlot()) + 90);
@@ -278,14 +305,22 @@ export default function PlayPage() {
       const signature = await connection.sendRawTransaction(transaction.serialize());
       setLatestSignature(signature);
       setNotice(`✅ ${actionLabel} envoyé avec succès !`);
+      
       // Si c'est un resolve, force un refresh immédiat pour afficher le nouveau cycle
       if (action === "Resolve") {
         setTimeout(() => {
-          if (refreshLiveRef.current) refreshLiveRef.current();
-        }, 1500);
+          if (realtimeVaultRef.current) {
+            realtimeVaultRef.current.refresh();
+          }
+        }, 500); // Réduit de 1500ms à 500ms pour plus de réactivité
       }
     } catch (actionError) {
       setError(`❌ Erreur ${String(action)} : ` + (actionError instanceof Error ? actionError.message : `${String(action)} a échoué.`));
+      
+      // Rollback optimistic update en cas d'erreur
+      if (realtimeVaultRef.current) {
+        realtimeVaultRef.current.refresh();
+      }
     } finally {
       setLoading(false);
     }
