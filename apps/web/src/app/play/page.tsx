@@ -8,7 +8,8 @@ import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../li
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, ENTRY_LAMPORTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { CycleGraph } from "../../components/cycle-graph";
+import { CycleGraphEnhanced } from "../../components/cycle-graph-enhanced";
+import { WinnerNotification } from "../../components/winner-notification";
 
 const ACTION_BUTTONS = [
   ["Deposit", "Take leadership and reset the timer."],
@@ -39,6 +40,8 @@ export default function PlayPage() {
   const [autoResolving, setAutoResolving] = useState(false);
   const [lastTimerStart, setLastTimerStart] = useState<bigint | null>(null);
   const [lastCycleNumber, setLastCycleNumber] = useState<bigint | null>(null);
+  const [showWinnerNotification, setShowWinnerNotification] = useState(false);
+  const [winnerData, setWinnerData] = useState<{ winner: string; payout: string } | null>(null);
 
   const programId = getProgramId();
 
@@ -63,7 +66,7 @@ export default function PlayPage() {
       setAutoResolving(true);
       (async () => {
         try {
-          setNotice("Résolution du cycle en cours...");
+          setNotice("⏳ Résolution automatique du cycle en cours...");
           const leader = new PublicKey(vault.leader);
           const expiry = BigInt((await connection.getSlot()) + 90);
           const instruction = buildActionInstruction({
@@ -78,14 +81,14 @@ export default function PlayPage() {
           transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
           transaction.sign(sessionWallet);
           await connection.sendRawTransaction(transaction.serialize());
-          setNotice("Cycle résolu ! Nouveau cycle prêt.");
+          setNotice("✅ Cycle résolu avec succès ! Nouveau cycle prêt.");
           setError(null);
           // Forcer un refresh immédiat après resolve
           setTimeout(() => {
             if (refreshLiveRef.current) refreshLiveRef.current();
           }, 1500);
         } catch (err) {
-          setError("Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
+          setError("❌ Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
         } finally {
           setTimeout(() => setAutoResolving(false), 2500);
         }
@@ -111,6 +114,15 @@ export default function PlayPage() {
         
         // Détecte si c'est un nouveau cycle
         const isNewCycle = nextVault && vault && nextVault.cycleNumber !== vault.cycleNumber;
+        
+        // Si nouveau cycle ET qu'il y a un gagnant précédent, afficher la notification
+        if (isNewCycle && nextVault.lastResolvedWinner && nextVault.lastResolvedWinner !== "11111111111111111111111111111111") {
+          setWinnerData({
+            winner: nextVault.lastResolvedWinner,
+            payout: formatSolFromLamports(Number(nextVault.lastResolvedPayout)),
+          });
+          setShowWinnerNotification(true);
+        }
         
         setVault(nextVault);
         setLastTimerStart(nextVault ? nextVault.timerStartSlot : null);
@@ -300,14 +312,14 @@ export default function PlayPage() {
     const sessionBalance = await connection.getBalance(sessionWallet.publicKey);
     const actionCost = action === "Resolve" ? 0 : (action in ACTION_COSTS ? ACTION_COSTS[action as keyof typeof ACTION_COSTS] : ENTRY_LAMPORTS);
     if (sessionBalance < actionCost) {
-      setError(`Solde insuffisant dans le session wallet. Besoin: ${formatSolFromLamports(actionCost)} SOL, Disponible: ${formatSolFromLamports(sessionBalance)} SOL. Clique sur "Fund session" pour ajouter des SOL.`);
+      setError(`💰 Solde insuffisant dans le session wallet.\n📊 Besoin: ${formatSolFromLamports(actionCost)} SOL\n💵 Disponible: ${formatSolFromLamports(sessionBalance)} SOL\n\n👉 Clique sur "Fund" pour ajouter des SOL.`);
       return;
     }
 
     // Si le timer est à zéro ET qu'un leader existe ET ce n'est pas un deposit, bloquer
     const cycleActive = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
     if (remainingSeconds === 0 && cycleActive && action !== "Resolve" && action !== "Deposit") {
-      setError("Cycle terminé : il faut d'abord résoudre (Resolve) avant toute autre action.");
+      setError("⏱️ Cycle terminé : il faut d'abord résoudre (Resolve) avant toute autre action.");
       return;
     }
 
@@ -330,7 +342,7 @@ export default function PlayPage() {
       transaction.sign(sessionWallet);
       const signature = await connection.sendRawTransaction(transaction.serialize());
       setLatestSignature(signature);
-      setNotice(`${actionLabel} transaction sent to devnet.`);
+      setNotice(`✅ ${actionLabel} envoyé avec succès !`);
       // Si c'est un resolve, force un refresh immédiat pour afficher le nouveau cycle
       if (action === "Resolve") {
         setTimeout(() => {
@@ -338,7 +350,7 @@ export default function PlayPage() {
         }, 1500);
       }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : `${String(action)} failed.`);
+      setError(`❌ Erreur ${String(action)} : ` + (actionError instanceof Error ? actionError.message : `${String(action)} a échoué.`));
     } finally {
       setLoading(false);
     }
@@ -357,12 +369,19 @@ export default function PlayPage() {
 
       <section className="section section--tight shell">
         {!programId ? (
-          <div className="notice">
-            No program ID configured yet. Set NEXT_PUBLIC_NODUS_PROGRAM_ID to switch from preview mode to live devnet mode.
+          <div className="notice notice--warning">
+            ⚠️ Aucun program ID configuré. Définis NEXT_PUBLIC_NODUS_PROGRAM_ID pour passer en mode devnet live.
           </div>
         ) : null}
-        {notice ? <div className="notice">{notice}</div> : null}
+        {notice ? <div className="notice notice--success">{notice}</div> : null}
         {error ? <div className="notice notice--danger">{error}</div> : null}
+        {latestSignature && (
+          <div className="notice notice--info">
+            🔗 Transaction: <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer" style={{color: '#8cf5c5', textDecoration: 'underline'}}>
+              {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
+            </a>
+          </div>
+        )}
       </section>
 
       <section className="section shell">
@@ -370,7 +389,7 @@ export default function PlayPage() {
           {/* Graphique principal */}
           <div className="play-main">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
-              <CycleGraph
+              <CycleGraphEnhanced
                 remainingSeconds={remainingSeconds}
                 maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
                 pressure={vault ? Number(vault.pressureCount) : 0}
@@ -477,6 +496,9 @@ export default function PlayPage() {
 
             <article className="metric-board">
               <h3>Cycle actions</h3>
+              <p style={{ fontSize: '0.85em', color: '#888', marginBottom: '1rem' }}>
+                💡 Chaque action a un coût et un effet unique sur le cycle
+              </p>
               <div className="action-grid">
                 {ACTION_BUTTONS.filter(([action]) => action !== "Resolve").map(([action, body]) => {
                   const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
@@ -488,21 +510,34 @@ export default function PlayPage() {
                   const cycleActive = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
                   const cycleEnded = remainingSeconds === 0 && cycleActive;
                   const disabled = loading || autoResolving || !sessionWallet || !programId || (cycleEnded && action !== "Deposit");
+                  
+                  // Emoji pour chaque action
+                  const actionEmoji: Record<string, string> = {
+                    "Deposit": "💰",
+                    "Shield": "🛡️",
+                    "Sabotage": "💣",
+                    "Anchor": "⚓",
+                    "ArmSnipe": "🎯",
+                    "Curse": "👻",
+                    "Blizzard": "❄️",
+                  };
+                  
                   return (
                     <button
                       key={action}
                       onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
                       disabled={disabled}
+                      title={body}
                     >
-                      <strong>{action}</strong>
+                      <strong>{actionEmoji[action] || "🎮"} {action}</strong>
                       <small>{body}</small>
-                      <small>Cost: {cost}</small>
+                      <small style={{color: '#8cf5c5', fontWeight: 600}}>💵 {cost}</small>
                     </button>
                   );
                 })}
                 {autoResolving && (
                   <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500, gridColumn: '1 / -1', textAlign: 'center'}}>
-                    Résolution automatique du cycle en cours...
+                    ⏳ Résolution automatique du cycle en cours...
                   </div>
                 )}
               </div>
@@ -510,6 +545,18 @@ export default function PlayPage() {
           </div>
         </div>
       </section>
+
+      {/* Winner Notification */}
+      {showWinnerNotification && winnerData && (
+        <WinnerNotification
+          winner={shortenAddress(winnerData.winner)}
+          payout={winnerData.payout}
+          onClose={() => {
+            setShowWinnerNotification(false);
+            setWinnerData(null);
+          }}
+        />
+      )}
     </>
   );
 }
