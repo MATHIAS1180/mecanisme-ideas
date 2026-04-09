@@ -417,20 +417,34 @@ impl Processor {
             return Err(NodusError::InvalidLeaderAccount.into());
         }
 
+        // Calculer le pot disponible (balance - rent reserve - ancien carry-over)
         let rent_reserve = Rent::get()?.minimum_balance(VaultState::LEN);
-        let gross_pot = vault_account.lamports().saturating_sub(rent_reserve);
-        let protocol_fee = gross_pot.saturating_mul(vault.protocol_fee_bps as u64) / 10_000;
-        let carry = gross_pot.saturating_mul(vault.curse_count as u64) / 100;
-        let payout = gross_pot.saturating_sub(protocol_fee).saturating_sub(carry);
+        let current_balance = vault_account.lamports();
+        let old_carry = vault.carry_over_lamports;
+        
+        // Le pot actuel = balance totale - rent - ancien carry
+        let available_pot = current_balance.saturating_sub(rent_reserve).saturating_sub(old_carry);
+        
+        // Calculer les distributions
+        let protocol_fee = available_pot.saturating_mul(vault.protocol_fee_bps as u64) / 10_000;
+        let new_carry = available_pot.saturating_mul(vault.curse_count as u64) / 100;
+        let payout = available_pot.saturating_sub(protocol_fee).saturating_sub(new_carry);
 
+        msg!("nodus: resolve - pot: {}, fee: {}, carry: {}, payout: {}", available_pot, protocol_fee, new_carry, payout);
+
+        // Transférer les lamports (seulement payout et fee, le carry reste dans le vault)
         Self::debit_vault_credit_target(vault_account, leader_account, payout)?;
         Self::debit_vault_credit_target(vault_account, protocol_fee_wallet, protocol_fee)?;
 
+        // Le nouveau carry = ancien carry + nouveau carry
+        let total_carry = checked_add(old_carry, new_carry)?;
+
+        // Mettre à jour le vault state
         vault.last_resolved_winner = vault.leader;
         vault.last_resolved_payout = payout;
-        vault.last_cycle_pot = gross_pot;
+        vault.last_cycle_pot = available_pot;
         vault.last_cycle_pressure = vault.pressure_count;
-        vault.carry_over_lamports = carry;
+        vault.carry_over_lamports = total_carry;
         vault.leader = Pubkey::default();
         vault.leader_since_slot = 0;
         vault.timer_start_slot = 0;
@@ -446,7 +460,7 @@ impl Processor {
         vault.cycle_number = checked_add(vault.cycle_number, 1)?;
 
         Self::store_vault(vault_account, vault)?;
-        msg!("nodus: cycle resolved");
+        msg!("nodus: cycle resolved, new cycle #{}, carry-over: {}", vault.cycle_number, total_carry);
         Ok(())
     }
 
@@ -619,20 +633,34 @@ impl Processor {
             return Err(NodusError::InvalidLeaderAccount.into());
         }
 
+        // Calculer le pot disponible (balance - rent reserve - ancien carry-over)
         let rent_reserve = Rent::get()?.minimum_balance(VaultState::LEN);
-        let gross_pot = vault_account.lamports().saturating_sub(rent_reserve);
-        let protocol_fee = gross_pot.saturating_mul(vault.protocol_fee_bps as u64) / 10_000;
-        let carry = gross_pot.saturating_mul(vault.curse_count as u64) / 100;
-        let payout = gross_pot.saturating_sub(protocol_fee).saturating_sub(carry);
+        let current_balance = vault_account.lamports();
+        let old_carry = vault.carry_over_lamports;
+        
+        // Le pot actuel = balance totale - rent - ancien carry
+        let available_pot = current_balance.saturating_sub(rent_reserve).saturating_sub(old_carry);
+        
+        // Calculer les distributions
+        let protocol_fee = available_pot.saturating_mul(vault.protocol_fee_bps as u64) / 10_000;
+        let new_carry = available_pot.saturating_mul(vault.curse_count as u64) / 100;
+        let payout = available_pot.saturating_sub(protocol_fee).saturating_sub(new_carry);
 
+        msg!("nodus: resolve - pot: {}, fee: {}, carry: {}, payout: {}", available_pot, protocol_fee, new_carry, payout);
+
+        // Transférer les lamports (seulement payout et fee, le carry reste dans le vault)
         Self::debit_vault_credit_target(vault_account, leader_account, payout)?;
         Self::debit_vault_credit_target(vault_account, protocol_fee_wallet, protocol_fee)?;
 
+        // Le nouveau carry = ancien carry + nouveau carry
+        let total_carry = checked_add(old_carry, new_carry)?;
+
+        // Mettre à jour le vault state
         vault.last_resolved_winner = vault.leader;
         vault.last_resolved_payout = payout;
-        vault.last_cycle_pot = gross_pot;
+        vault.last_cycle_pot = available_pot;
         vault.last_cycle_pressure = vault.pressure_count;
-        vault.carry_over_lamports = carry;
+        vault.carry_over_lamports = total_carry;
         vault.leader = Pubkey::default();
         vault.leader_since_slot = 0;
         vault.timer_start_slot = 0;
@@ -647,7 +675,7 @@ impl Processor {
         vault.active_snipe_escrow_lamports = 0;
         vault.cycle_number = checked_add(vault.cycle_number, 1)?;
 
-        msg!("nodus: cycle auto-resolved, new cycle #{}", vault.cycle_number);
+        msg!("nodus: cycle auto-resolved, new cycle #{}, carry-over: {}", vault.cycle_number, total_carry);
         Ok(vault)
     }
 }
