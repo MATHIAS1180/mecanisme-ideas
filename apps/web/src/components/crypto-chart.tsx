@@ -211,8 +211,12 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
 
   return (
     <div className="crypto-chart">
-      <canvas ref={canvasRef} className="crypto-chart__canvas" />
-      <div className="crypto-chart__info">
+      <canvas 
+        ref={canvasRef} 
+        className="crypto-chart__canvas"
+        style={{ height: 'clamp(250px, 40vh, 450px)' }}
+      />
+      <div className="crypto-chart__stats">
         <div className="crypto-chart__stat">
           <span className="crypto-chart__label">POT</span>
           <span className="crypto-chart__value crypto-chart__value--pot">{pot} SOL</span>
