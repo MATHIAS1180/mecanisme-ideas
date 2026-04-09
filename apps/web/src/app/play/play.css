@@ -58,7 +58,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  align-items: start;
+  align-items: stretch;
 }
 
 /* Sidebars - ULTRA COMPACT */
