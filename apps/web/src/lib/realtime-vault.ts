@@ -14,7 +14,10 @@ export class RealtimeVault {
   private lastUpdateTime = 0;
   private retryCount = 0;
   private maxRetries = 3;
-  private retryDelay = 1000; // Start with 1 second
+  private retryDelay = 1000;
+  private lastFetchTime = 0;
+  private minFetchInterval = 2000; // Minimum 2s entre fetches manuels
+  private isSubscribed = false;
 
   constructor(connection: Connection, vaultPda: PublicKey) {
     this.connection = connection;
@@ -23,7 +26,8 @@ export class RealtimeVault {
 
   /**
    * Subscribe to vault changes in real-time via WebSocket
-   * Ultra-fast updates with "processed" commitment (<100ms latency)
+   * STRATÉGIE: WebSocket UNIQUEMENT, pas de polling!
+   * Commitment "confirmed" pour équilibre vitesse/fiabilité
    */
   async subscribe() {
     if (this.subscriptionId !== null) {
@@ -32,24 +36,25 @@ export class RealtimeVault {
     }
 
     try {
-      // Initial fetch avec "processed" pour vitesse maximale
-      console.log("⚡ Fetching initial vault state...");
-      const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
+      // Initial fetch UNIQUE (pas de retry pour économiser RPC)
+      console.log("⚡ Fetching initial vault state (ONE TIME)...");
+      const account = await this.connection.getAccountInfo(this.vaultPda, "confirmed");
       if (account?.data) {
         const vault = decodeVault(account.data);
         console.log("✅ Initial vault loaded:", {
           cycle: vault.cycleNumber.toString(),
           leader: vault.leader,
-          timerStart: vault.timerStartSlot.toString(),
         });
         this.lastVault = vault;
+        this.lastFetchTime = Date.now();
         this.notifyListeners(vault);
       } else {
         console.error("❌ Vault account not found!");
       }
 
-      // Subscribe to changes via WebSocket avec "processed" commitment
-      console.log("📡 Subscribing to WebSocket updates...");
+      // Subscribe to changes via WebSocket avec "confirmed" commitment
+      // "confirmed" = bon équilibre entre vitesse (~400ms) et fiabilité
+      console.log("📡 Subscribing to WebSocket updates (confirmed commitment)...");
       this.subscriptionId = this.connection.onAccountChange(
         this.vaultPda,
         (accountInfo) => {
@@ -59,18 +64,19 @@ export class RealtimeVault {
               console.log("📡 WebSocket update:", {
                 cycle: vault.cycleNumber.toString(),
                 leader: vault.leader,
-                timerStart: vault.timerStartSlot.toString(),
+                pressure: vault.pressureCount.toString(),
               });
               this.queueUpdate(vault);
+              this.isSubscribed = true;
             }
           } catch (error) {
             console.error("Error decoding vault:", error);
           }
         },
-        "processed" // ⚡ ULTRA-FAST: Updates en <100ms!
+        "confirmed" // Équilibre vitesse/fiabilité
       );
 
-      console.log("⚡ Subscribed to vault changes (WebSocket, processed commitment, <100ms latency)");
+      console.log("⚡ WebSocket subscribed (confirmed, ~400ms latency, NO POLLING)");
     } catch (error) {
       console.error("Error subscribing to vault:", error);
     }
@@ -192,13 +198,28 @@ export class RealtimeVault {
   }
 
   /**
-   * Manual refresh (fallback) - utilise aussi "processed" pour vitesse
-   * Avec retry logic et backoff exponentiel pour gérer rate limits
+   * Manual refresh - THROTTLED pour éviter rate limits
+   * Utilisé UNIQUEMENT en cas d'urgence (WebSocket déconnecté)
    */
   async refresh() {
+    // Throttle: minimum 2s entre refreshes
+    const now = Date.now();
+    if (now - this.lastFetchTime < this.minFetchInterval) {
+      console.log("⏸️ Refresh throttled (too soon), relying on WebSocket");
+      return;
+    }
+
+    // Si WebSocket fonctionne, pas besoin de refresh manuel
+    if (this.isSubscribed && this.lastVault) {
+      console.log("✅ WebSocket active, skipping manual refresh");
+      return;
+    }
+
     try {
-      console.log("🔄 Manual refresh triggered");
-      const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
+      console.log("🔄 Manual refresh (WebSocket fallback)");
+      this.lastFetchTime = now;
+      
+      const account = await this.connection.getAccountInfo(this.vaultPda, "confirmed");
       if (account?.data) {
         const vault = decodeVault(account.data);
         console.log("✅ Refresh complete:", {
@@ -206,30 +227,10 @@ export class RealtimeVault {
           leader: vault.leader,
         });
         this.queueUpdate(vault);
-        this.retryCount = 0; // Reset retry count on success
-        this.retryDelay = 1000; // Reset delay
-      } else {
-        console.error("❌ Vault account not found during refresh!");
       }
     } catch (error: any) {
-      // Détection rate limit 429
       if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
-        console.warn(`⚠️ Rate limit hit (429), retry ${this.retryCount + 1}/${this.maxRetries}`);
-        
-        if (this.retryCount < this.maxRetries) {
-          this.retryCount++;
-          // Backoff exponentiel: 1s, 2s, 4s
-          const delay = this.retryDelay * Math.pow(2, this.retryCount - 1);
-          console.log(`⏳ Waiting ${delay}ms before retry...`);
-          
-          setTimeout(() => {
-            this.refresh();
-          }, delay);
-        } else {
-          console.error("❌ Max retries reached, giving up");
-          this.retryCount = 0;
-          this.retryDelay = 1000;
-        }
+        console.warn("⚠️ Rate limit hit - WebSocket will handle updates");
       } else {
         console.error("Error refreshing vault:", error);
       }

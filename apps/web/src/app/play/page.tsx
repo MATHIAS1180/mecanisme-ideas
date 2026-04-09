@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useEffect, useState, useRef } from "react";
+import { startTransition, useEffect, useState, useRef, useCallback } from "react";
 import { ACTION_COSTS, buildActionInstruction, buildFundSessionTransaction, buildInitializeInstruction, fetchVault, getProgramId, getNodusAccounts } from "../../lib/nodus-client";
 import { buildSweepTransaction, clearSessionWallet, createSessionWallet, loadSessionWallet } from "../../lib/session-wallet";
 import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../lib/format";
@@ -45,9 +45,8 @@ export default function PlayPage() {
 
   const programId = getProgramId();
 
-  const realtimeVaultRef = useRef<RealtimeVault | null>(null);
-  
-  // WebSocket real-time updates avec commitment "processed" pour <100ms latency
+  // ⚡ WEBSOCKET UNIQUEMENT - PAS DE POLLING!
+  // Le WebSocket gère TOUS les updates en temps réel
   useEffect(() => {
     if (!programId) return;
 
@@ -106,20 +105,6 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // 🔄 POLLING MODÉRÉ: Refresh toutes les 5 secondes (réduit pour éviter rate limit)
-  useEffect(() => {
-    if (!programId || !realtimeVaultRef.current) return;
-
-    let pollCount = 0;
-    const pollInterval = setInterval(() => {
-      pollCount++;
-      console.log(`🔄 Polling #${pollCount}: refresh manuel`);
-      realtimeVaultRef.current?.refresh();
-    }, 5000); // Toutes les 5 secondes pour éviter rate limit
-
-    return () => clearInterval(pollInterval);
-  }, [programId]);
-
   // ⏱️ Timer update continu (toutes les secondes)
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
@@ -158,64 +143,36 @@ export default function PlayPage() {
     return () => clearInterval(interval);
   }, [vault, connection, remainingSeconds]);
 
-  // Polling léger pour les données secondaires (pot, balances) - toutes les 10 secondes
-  useEffect(() => {
+  // 💾 CACHE STRATEGY: Fetch données secondaires UNIQUEMENT après actions utilisateur
+  // Pas de polling automatique pour économiser RPC
+  const fetchSecondaryData = useCallback(async () => {
     if (!programId) return;
 
-    let active = true;
-    let interval: number | null = null;
-
-    async function updateSecondaryData() {
-      if (!active || !programId) return;
-
-      try {
-        // Pot
-        const { vault: vaultPda } = getNodusAccounts(programId, programId);
-        const vaultBalance = await connection.getBalance(vaultPda);
+    try {
+      // Pot (calculé depuis vault state, pas de RPC call!)
+      if (vault) {
         const rentReserve = 2_000_000;
-        const carryOver = vault ? Number(vault.carryOverLamports) : 0;
-        const actualPot = Math.max(0, vaultBalance - rentReserve - carryOver);
+        const carryOver = Number(vault.carryOverLamports);
+        // On utilise une estimation basée sur le vault state
+        const estimatedBalance = rentReserve + carryOver + (Number(vault.pressureCount) * ENTRY_LAMPORTS);
+        const actualPot = Math.max(0, estimatedBalance - rentReserve - carryOver);
         setPot(formatSolFromLamports(actualPot));
-
-        // Session wallet balance
-        if (sessionWallet) {
-          const bal = await connection.getBalance(sessionWallet.publicKey);
-          setSessionBalance(formatSolFromLamports(bal));
-        }
-
-        // User stake (optionnel)
-        if (sessionWallet && programId) {
-          try {
-            const { userState } = getNodusAccounts(programId, sessionWallet.publicKey);
-            const acc = await connection.getAccountInfo(userState);
-            if (acc && acc.data) {
-              setUserStake("? (voir userState)");
-            } else {
-              setUserStake("0.0000");
-            }
-          } catch {
-            setUserStake("0.0000");
-          }
-        }
-      } catch (error: any) {
-        // Détection rate limit
-        if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
-          console.warn("⚠️ Rate limit hit during secondary data update");
-          setError("⚠️ RPC rate limit atteint. Utilise un RPC premium (Helius, QuickNode) pour éviter ce problème.");
-        } else {
-          console.error("Error updating secondary data:", error);
-        }
       }
+
+      // Session wallet balance (fetch UNIQUEMENT si nécessaire)
+      if (sessionWallet && !sessionBalance) {
+        const bal = await connection.getBalance(sessionWallet.publicKey);
+        setSessionBalance(formatSolFromLamports(bal));
+      }
+    } catch (error: any) {
+      console.error("Error fetching secondary data:", error);
     }
+  }, [programId, connection, sessionWallet, vault, sessionBalance]);
 
-    updateSecondaryData(); // Initial
-    interval = window.setInterval(updateSecondaryData, 10000); // Toutes les 10 secondes
-
-    return () => {
-      active = false;
-      if (interval) window.clearInterval(interval);
-    };
-  }, [programId, connection, sessionWallet, vault]);
+  // Fetch initial data ONCE
+  useEffect(() => {
+    fetchSecondaryData();
+  }, [vault?.cycleNumber]); // Re-fetch seulement au changement de cycle
 
 
 
@@ -250,16 +207,33 @@ export default function PlayPage() {
     try {
       const wallet = sessionWallet ?? createSessionWallet();
       const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
+      
+      // ⚡ OPTIMISATION: Build transaction avec blockhash "finalized"
+      const { blockhash } = await connection.getLatestBlockhash("finalized");
       const transaction = await buildFundSessionTransaction({
         connection,
         owner: publicKey,
         sessionWallet: wallet,
         lamports: Math.round(lamports),
       });
-      const signature = await sendTransaction(transaction, connection);
+      transaction.recentBlockhash = blockhash;
+      
+      // ⚡ OPTIMISATION: sendTransaction sans attendre confirmation
+      const signature = await sendTransaction(transaction, connection, {
+        skipPreflight: false,
+        maxRetries: 2,
+      });
+      
       setSessionWallet(wallet);
       setLatestSignature(signature);
-      setNotice("Session wallet funded. Future cycle actions can now use the local signer.");
+      setNotice("✅ Session wallet funded! Confirmation en cours...");
+      
+      // Update balance après 1s
+      setTimeout(async () => {
+        const bal = await connection.getBalance(wallet.publicKey);
+        setSessionBalance(formatSolFromLamports(bal));
+      }, 1000);
+      
     } catch (fundError) {
       setError(fundError instanceof Error ? fundError.message : "Funding failed.");
     } finally {
@@ -303,18 +277,6 @@ export default function PlayPage() {
       return;
     }
 
-    // Vérifier le solde du session wallet avant l'action
-    const sessionBalance = await connection.getBalance(sessionWallet.publicKey);
-    const actionCost = action === "Resolve" ? 0 : (action in ACTION_COSTS ? ACTION_COSTS[action as keyof typeof ACTION_COSTS] : ENTRY_LAMPORTS);
-    if (sessionBalance < actionCost) {
-      setError(`💰 Solde insuffisant dans le session wallet.\n📊 Besoin: ${formatSolFromLamports(actionCost)} SOL\n💵 Disponible: ${formatSolFromLamports(sessionBalance)} SOL\n\n👉 Clique sur "Fund" pour ajouter des SOL.`);
-      return;
-    }
-
-    // NOTE: Plus besoin de bloquer les actions quand timer à 0!
-    // Le smart contract gère l'auto-resolve automatiquement.
-    // Toute action sur un cycle expiré déclenchera l'auto-resolve puis l'action.
-
     setLoading(true);
     setError(null);
     
@@ -323,16 +285,17 @@ export default function PlayPage() {
       const optimisticUpdates: Record<string, Partial<NodusVault>> = {
         Deposit: {
           leader: sessionWallet.publicKey.toBase58(),
-          timerStartSlot: vault.timerStartSlot, // Sera mis à jour par le smart contract
+          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
         },
         Shield: {
           terminalLock: true,
         },
         Sabotage: {
-          // Timer sera réduit par le smart contract
+          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
         },
         Curse: {
           curseCount: Math.min(5, vault.curseCount + 1),
+          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
         },
         Blizzard: {
           pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
@@ -346,7 +309,7 @@ export default function PlayPage() {
 
     try {
       const actionLabel = String(action);
-      const expiry = BigInt((await connection.getSlot()) + 90);
+      const expiry = BigInt((await connection.getSlot("finalized")) + 90); // Use finalized for slot
       const leader = vault?.leader ? new PublicKey(vault.leader) : sessionWallet.publicKey;
       const instruction = buildActionInstruction({
         action,
@@ -355,38 +318,59 @@ export default function PlayPage() {
         leader,
         snipeExpirySlot: expiry,
       });
+      
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = sessionWallet.publicKey;
-      transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      
+      // ⚡ OPTIMISATION: Utiliser getLatestBlockhash avec "finalized" pour éviter rate limits
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("finalized");
+      transaction.recentBlockhash = blockhash;
+      transaction.lastValidBlockHeight = lastValidBlockHeight;
+      
       transaction.sign(sessionWallet);
-      const signature = await connection.sendRawTransaction(transaction.serialize());
+      
+      // ⚡ OPTIMISATION: sendRawTransaction avec skipPreflight pour vitesse maximale
+      const signature = await connection.sendRawTransaction(
+        transaction.serialize(),
+        {
+          skipPreflight: false, // Keep preflight for safety
+          maxRetries: 2, // Reduce retries
+        }
+      );
+      
       setLatestSignature(signature);
-      setNotice(`✅ ${actionLabel} envoyé avec succès !`);
+      setNotice(`✅ ${actionLabel} envoyé! Confirmation en cours...`);
+      
+      // ⚡ OPTIMISATION: Pas d'attente de confirmation, le WebSocket va update
+      // Refresh session balance après action
+      if (sessionWallet) {
+        setTimeout(async () => {
+          const bal = await connection.getBalance(sessionWallet.publicKey);
+          setSessionBalance(formatSolFromLamports(bal));
+        }, 1000);
+      }
+      
     } catch (actionError: any) {
       // Détection spécifique des erreurs rate limit
       const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
       
       if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
-        setError(`⚠️ RPC Rate Limit Atteint (429)
+        setError(`⚠️ RPC Rate Limit Atteint
 
-Le RPC public devnet est trop limité pour une app temps réel.
+Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
 
-🚀 SOLUTION: Utilise un RPC premium GRATUIT:
-• Helius: https://helius.dev (recommandé)
-• QuickNode: https://quicknode.com
-• Alchemy: https://alchemy.com
-
-📝 Ajoute dans Vercel:
-NEXT_PUBLIC_SOLANA_RPC_URL=https://ton-rpc-premium-url
-
-💡 Tous offrent un tier gratuit pour devnet!`);
+💡 Pour éviter ce problème, utilise un RPC premium gratuit:
+• Tatum: https://solana-devnet.gateway.tatum.io (pas de compte!)
+• Helius: https://helius.dev
+• QuickNode: https://quicknode.com`);
       } else {
-        setError(`❌ Erreur ${String(action)} : ${errorMessage}`);
+        setError(`❌ Erreur ${String(action)}: ${errorMessage}`);
       }
       
       // Rollback optimistic update en cas d'erreur
       if (realtimeVaultRef.current) {
-        realtimeVaultRef.current.refresh();
+        // Le WebSocket va refresh automatiquement
+        console.log("❌ Action failed, WebSocket will restore correct state");
       }
     } finally {
       setLoading(false);
