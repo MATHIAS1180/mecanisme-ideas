@@ -45,16 +45,9 @@ export default function PlayPage() {
 
   const programId = getProgramId();
 
-  // Expose refreshLive pour pouvoir l'appeler après resolve
-  const refreshLiveRef = useRef<() => void>(() => {});
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
   
-  // NOTE: L'auto-resolve est maintenant géré par le smart contract!
-  // Dès qu'une action (Deposit, Shield, etc.) est effectuée sur un cycle expiré,
-  // le smart contract résout automatiquement le cycle avant d'exécuter l'action.
-  // Plus besoin d'auto-resolve côté UI!
-
-  // WebSocket real-time updates (pas de polling!)
+  // WebSocket real-time updates avec commitment "processed" pour <100ms latency
   useEffect(() => {
     if (!programId) return;
 
@@ -126,97 +119,6 @@ export default function PlayPage() {
 
     return () => clearInterval(interval);
   }, [vault, connection]);
-
-  // 🚀 AUTO-RESOLVE automatique quand le timer atteint 0
-  useEffect(() => {
-    console.log("🔍 Auto-resolve check:", {
-      programId: !!programId,
-      sessionWallet: !!sessionWallet,
-      vault: !!vault,
-      remainingSeconds,
-      leader: vault?.leader,
-      loading,
-    });
-
-    if (!programId || !sessionWallet || !vault) {
-      console.log("❌ Auto-resolve: Conditions non remplies (programId, sessionWallet ou vault manquant)");
-      return;
-    }
-    
-    if (remainingSeconds !== 0) {
-      console.log("⏳ Auto-resolve: Timer pas encore à 0 (", remainingSeconds, "secondes restantes)");
-      return;
-    }
-    
-    if (!vault.leader || vault.leader === "11111111111111111111111111111111") {
-      console.log("❌ Auto-resolve: Pas de leader actif");
-      return;
-    }
-    
-    if (loading) {
-      console.log("⏸️ Auto-resolve: Déjà en cours de chargement");
-      return;
-    }
-
-    console.log("✅ Auto-resolve: Toutes les conditions remplies, démarrage dans 2 secondes...");
-
-    // Attendre 2 secondes après que le timer atteint 0, puis auto-resolve
-    const autoResolveTimer = setTimeout(async () => {
-      console.log("🤖 Auto-resolve: Démarrage de la résolution automatique du cycle...");
-      
-      try {
-        setLoading(true);
-        const currentSlot = await connection.getSlot();
-        const expiry = BigInt(currentSlot + 90);
-        const leaderPubkey = new PublicKey(vault.leader);
-        
-        console.log("📝 Auto-resolve: Construction de la transaction...", {
-          leader: vault.leader,
-          currentSlot,
-          expiry: expiry.toString(),
-        });
-        
-        const instruction = buildActionInstruction({
-          action: "Resolve",
-          programId,
-          signer: sessionWallet.publicKey,
-          leader: leaderPubkey,
-          snipeExpirySlot: expiry,
-        });
-        
-        const transaction = new Transaction().add(instruction);
-        transaction.feePayer = sessionWallet.publicKey;
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.sign(sessionWallet);
-        
-        console.log("📤 Auto-resolve: Envoi de la transaction...");
-        const signature = await connection.sendRawTransaction(transaction.serialize());
-        
-        console.log("✅ Auto-resolve réussi:", signature);
-        setNotice("🤖 Cycle résolu automatiquement !");
-        setLatestSignature(signature);
-        
-        // Refresh après 500ms
-        setTimeout(() => {
-          console.log("🔄 Auto-resolve: Refresh des données...");
-          if (realtimeVaultRef.current) {
-            realtimeVaultRef.current.refresh();
-          }
-        }, 500);
-      } catch (error) {
-        console.error("❌ Erreur auto-resolve:", error);
-        setError(`❌ Erreur auto-resolve: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
-      } finally {
-        setLoading(false);
-      }
-    }, 2000); // 2 secondes après que le timer atteint 0
-
-    return () => {
-      console.log("🧹 Auto-resolve: Nettoyage du timer");
-      clearTimeout(autoResolveTimer);
-    };
-  }, [remainingSeconds, vault, programId, sessionWallet, connection, loading]);
 
   // Polling léger pour les données secondaires (pot, balances) - toutes les 5 secondes
   useEffect(() => {
@@ -416,15 +318,6 @@ export default function PlayPage() {
       const signature = await connection.sendRawTransaction(transaction.serialize());
       setLatestSignature(signature);
       setNotice(`✅ ${actionLabel} envoyé avec succès !`);
-      
-      // Si c'est un resolve, force un refresh immédiat pour afficher le nouveau cycle
-      if (action === "Resolve") {
-        setTimeout(() => {
-          if (realtimeVaultRef.current) {
-            realtimeVaultRef.current.refresh();
-          }
-        }, 500); // Réduit de 1500ms à 500ms pour plus de réactivité
-      }
     } catch (actionError) {
       setError(`❌ Erreur ${String(action)} : ` + (actionError instanceof Error ? actionError.message : `${String(action)} a échoué.`));
       
@@ -506,6 +399,7 @@ export default function PlayPage() {
           <div className="play-sidebar">
             <article className="terminal">
               <p className="eyebrow">Cycle telemetry</p>
+              
               <div className="terminal__row">
                 <span className="terminal__label">Cycle #</span>
                 <strong className="terminal__value">{vault ? String(vault.cycleNumber) : "-"}</strong>
@@ -516,7 +410,9 @@ export default function PlayPage() {
               </div>
               <div className="terminal__row">
                 <span className="terminal__label">Countdown</span>
-                <strong className="terminal__value">{formatCountdown(remainingSeconds)}</strong>
+                <strong className="terminal__value">
+                  {formatCountdown(remainingSeconds)}
+                </strong>
                 {error && error.includes("429") && (
                   <span style={{ color: '#ff6b6b', fontSize: '0.9em', marginLeft: 8 }}>Trop de requêtes RPC (429)</span>
                 )}
