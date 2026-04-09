@@ -59,6 +59,13 @@ export default function PlayPage() {
     const handleVaultChange = (nextVault: NodusVault | null) => {
       if (!nextVault) return;
 
+      console.log("📡 WebSocket update reçu:", {
+        cycle: nextVault.cycleNumber.toString(),
+        leader: nextVault.leader,
+        timerStart: nextVault.timerStartSlot.toString(),
+        timerReset: nextVault.timerResetSlots.toString(),
+      });
+
       // Détecte si c'est un nouveau cycle
       const isNewCycle = vault && nextVault.cycleNumber !== vault.cycleNumber;
       
@@ -91,6 +98,18 @@ export default function PlayPage() {
       realtimeVault.unsubscribe();
     };
   }, [programId, connection, vault]);
+
+  // 🔄 POLLING DE SECOURS: Refresh toutes les 2 secondes pour garantir la sync
+  useEffect(() => {
+    if (!programId || !realtimeVaultRef.current) return;
+
+    const pollInterval = setInterval(() => {
+      console.log("🔄 Polling de secours: refresh manuel");
+      realtimeVaultRef.current?.refresh();
+    }, 2000); // Toutes les 2 secondes
+
+    return () => clearInterval(pollInterval);
+  }, [programId]);
 
   // ⏱️ Timer update continu (toutes les secondes)
   useEffect(() => {

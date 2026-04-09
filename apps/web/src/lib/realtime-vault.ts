@@ -30,23 +30,34 @@ export class RealtimeVault {
 
     try {
       // Initial fetch avec "processed" pour vitesse maximale
+      console.log("⚡ Fetching initial vault state...");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
+        console.log("✅ Initial vault loaded:", {
+          cycle: vault.cycleNumber.toString(),
+          leader: vault.leader,
+          timerStart: vault.timerStartSlot.toString(),
+        });
         this.lastVault = vault;
         this.notifyListeners(vault);
+      } else {
+        console.error("❌ Vault account not found!");
       }
 
       // Subscribe to changes via WebSocket avec "processed" commitment
-      // "processed" = ~50-100ms après confirmation on-chain (le plus rapide!)
-      // "confirmed" = ~400ms (plus sûr mais plus lent)
-      // "finalized" = ~13s (très sûr mais trop lent pour UX)
+      console.log("📡 Subscribing to WebSocket updates...");
       this.subscriptionId = this.connection.onAccountChange(
         this.vaultPda,
         (accountInfo) => {
           try {
             if (accountInfo.data) {
               const vault = decodeVault(accountInfo.data);
+              console.log("📡 WebSocket update:", {
+                cycle: vault.cycleNumber.toString(),
+                leader: vault.leader,
+                timerStart: vault.timerStartSlot.toString(),
+              });
               this.queueUpdate(vault);
             }
           } catch (error) {
@@ -168,10 +179,17 @@ export class RealtimeVault {
    */
   async refresh() {
     try {
+      console.log("🔄 Manual refresh triggered");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
+        console.log("✅ Refresh complete:", {
+          cycle: vault.cycleNumber.toString(),
+          leader: vault.leader,
+        });
         this.queueUpdate(vault);
+      } else {
+        console.error("❌ Vault account not found during refresh!");
       }
     } catch (error) {
       console.error("Error refreshing vault:", error);
