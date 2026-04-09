@@ -199,24 +199,24 @@ export class RealtimeVault {
 
   /**
    * Manual refresh - THROTTLED pour éviter rate limits
-   * Utilisé UNIQUEMENT en cas d'urgence (WebSocket déconnecté)
+   * Utilisé UNIQUEMENT en cas d'urgence (WebSocket déconnecté ou cycle bloqué)
    */
-  async refresh() {
-    // Throttle: minimum 2s entre refreshes
+  async refresh(force = false) {
+    // Throttle: minimum 2s entre refreshes (sauf si force=true)
     const now = Date.now();
-    if (now - this.lastFetchTime < this.minFetchInterval) {
+    if (!force && now - this.lastFetchTime < this.minFetchInterval) {
       console.log("⏸️ Refresh throttled (too soon), relying on WebSocket");
       return;
     }
 
-    // Si WebSocket fonctionne, pas besoin de refresh manuel
-    if (this.isSubscribed && this.lastVault) {
+    // Si WebSocket fonctionne ET pas forcé, pas besoin de refresh manuel
+    if (!force && this.isSubscribed && this.lastVault) {
       console.log("✅ WebSocket active, skipping manual refresh");
       return;
     }
 
     try {
-      console.log("🔄 Manual refresh (WebSocket fallback)");
+      console.log(force ? "🔄 FORCE refresh (cycle bloqué)" : "🔄 Manual refresh (WebSocket fallback)");
       this.lastFetchTime = now;
       
       const account = await this.connection.getAccountInfo(this.vaultPda, "confirmed");

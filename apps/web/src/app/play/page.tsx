@@ -45,6 +45,7 @@ export default function PlayPage() {
 
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
+  const lastZeroTimeRef = useRef<number | null>(null); // Track quand timer atteint 0
 
   // ⚡ WEBSOCKET UNIQUEMENT - PAS DE POLLING!
   // Le WebSocket gère TOUS les updates en temps réel
@@ -115,18 +116,27 @@ export default function PlayPage() {
 
     const updateTimer = async () => {
       try {
-        const currentSlot = await connection.getSlot();
+        const currentSlot = await connection.getSlot("finalized");
         const slotEnd = Number(vault.timerStartSlot) + Number(vault.timerResetSlots);
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
         
-        // Si le timer vient d'atteindre 0, force un refresh agressif
-        if (secondsLeft === 0 && remainingSeconds > 0) {
-          console.log("⏰ Timer reached 0! Forcing aggressive refresh...");
-          // Force 3 refreshs rapides pour être sûr de capter le changement
-          setTimeout(() => realtimeVaultRef.current?.refresh(), 100);
-          setTimeout(() => realtimeVaultRef.current?.refresh(), 500);
-          setTimeout(() => realtimeVaultRef.current?.refresh(), 1000);
+        // 🚨 DÉTECTION CYCLE BLOQUÉ: Si timer à 0 depuis >5s, force refresh
+        if (secondsLeft === 0 && remainingSeconds === 0) {
+          const now = Date.now();
+          if (!lastZeroTimeRef.current) {
+            lastZeroTimeRef.current = now;
+          } else if (now - lastZeroTimeRef.current > 5000) {
+            // Timer à 0 depuis >5s = cycle probablement bloqué
+            console.warn("⚠️ Cycle bloqué détecté (timer à 0 depuis >5s), force refresh...");
+            if (realtimeVaultRef.current) {
+              realtimeVaultRef.current.refresh(true); // Force refresh!
+            }
+            lastZeroTimeRef.current = now; // Reset pour éviter spam
+          }
+        } else if (secondsLeft > 0) {
+          // Reset le compteur si timer > 0
+          lastZeroTimeRef.current = null;
         }
         
         setRemainingSeconds(secondsLeft);
@@ -461,8 +471,26 @@ Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
                 <strong className="terminal__value">
                   {formatCountdown(remainingSeconds)}
                 </strong>
-                {error && error.includes("429") && (
-                  <span style={{ color: '#ff6b6b', fontSize: '0.9em', marginLeft: 8 }}>Trop de requêtes RPC (429)</span>
+                {remainingSeconds === 0 && vault?.leader && vault.leader !== "11111111111111111111111111111111" && (
+                  <button 
+                    onClick={() => {
+                      console.log("🔄 Manual refresh requested (FORCE)");
+                      realtimeVaultRef.current?.refresh(true); // Force refresh!
+                    }}
+                    style={{ 
+                      marginLeft: 8, 
+                      padding: '2px 8px', 
+                      fontSize: '0.75em',
+                      background: 'rgba(140, 245, 197, 0.1)',
+                      border: '1px solid rgba(140, 245, 197, 0.3)',
+                      borderRadius: 4,
+                      color: '#8cf5c5',
+                      cursor: 'pointer'
+                    }}
+                    title="Rafraîchir si le cycle semble bloqué"
+                  >
+                    🔄 Refresh
+                  </button>
                 )}
               </div>
               <div className="terminal__row">
