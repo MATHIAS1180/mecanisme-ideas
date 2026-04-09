@@ -94,7 +94,6 @@ input {
 
 .hero-grid,
 .dual-grid,
-.play-grid,
 .card-grid,
 .history-grid,
 .docs-grid,
@@ -104,8 +103,7 @@ input {
 }
 
 .hero-grid,
-.dual-grid,
-.play-grid {
+.dual-grid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
@@ -165,10 +163,8 @@ input {
   min-height: 100%;
 }
 
-.terminal__row,
 .metric-row,
 .detail-row,
-.session-row,
 .history-row {
   display: flex;
   justify-content: space-between;
@@ -177,27 +173,23 @@ input {
   border-bottom: 1px solid rgba(142, 169, 188, 0.12);
 }
 
-.terminal__row:last-child,
 .metric-row:last-child,
 .detail-row:last-child,
-.session-row:last-child,
 .history-row:last-child {
   border-bottom: 0;
 }
 
-.terminal__label,
 .metric-row span:first-child,
-.detail-row span:first-child,
-.session-row span:first-child {
+.detail-row span:first-child {
   color: var(--muted);
 }
 
-.terminal__value,
 .metric-row strong,
-.detail-row strong,
-.session-row strong {
+.detail-row strong {
   font-family: var(--font-mono), monospace;
 }
+
+/* terminal__row, terminal__label, terminal__value, session-row styles moved to play.css */
 
 .hero-actions,
 .stack,
@@ -337,13 +329,11 @@ input {
   margin-top: 6px;
 }
 
-.dual-grid > *:first-child,
-.play-grid > *:first-child {
+.dual-grid > *:first-child {
   grid-column: span 7;
 }
 
-.dual-grid > *:last-child,
-.play-grid > *:last-child {
+.dual-grid > *:last-child {
   grid-column: span 5;
 }
 
@@ -358,29 +348,7 @@ input {
   margin-top: 0;
 }
 
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.action-grid button {
-  padding: 16px;
-  text-align: left;
-  color: var(--text);
-}
-
-.action-grid button small {
-  display: block;
-  color: var(--muted);
-  margin-top: 6px;
-}
-
-.action-grid button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
-}
+/* Action grid styles moved to play.css */
 
 .input-shell {
   display: inline-flex;
@@ -396,6 +364,8 @@ input {
   color: var(--text);
   outline: none;
 }
+
+/* Play page input-shell styles in play.css */
 
 .notice {
   padding: 16px 18px;
@@ -466,16 +436,14 @@ input {
 @media (max-width: 980px) {
   .hero-copy,
   .hero-panel,
-  .dual-grid > *,
-  .play-grid > * {
+  .dual-grid > * {
     grid-column: 1 / -1;
   }
 
   .card-grid,
   .docs-grid,
   .faq-grid,
-  .history-grid,
-  .action-grid {
+  .history-grid {
     grid-template-columns: 1fr;
   }
 
@@ -836,200 +804,15 @@ input {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* ========================================
-   Play Page Layout - Enhanced
-   ======================================== */
+/* Play page styles moved to play.css */
 
-.play-container {
-  display: grid;
-  gap: 2rem;
-}
+/* Metric board styles for play page moved to play.css */
 
-.play-main {
-  width: 100%;
-}
+/* Action grid styles moved to play.css */
 
-.play-sidebar {
-  display: grid;
-  gap: 1.5rem;
-}
+/* Terminal styles moved to play.css */
 
-@media (min-width: 1024px) {
-  .play-container {
-    grid-template-columns: 1fr 420px;
-  }
-}
-
-@media (max-width: 1023px) {
-  .play-container {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ========================================
-   Enhanced Metric Board
-   ======================================== */
-
-.metric-board {
-  background: var(--panel-strong);
-  border: 1px solid rgba(140, 245, 197, 0.12);
-  box-shadow: 
-    0 10px 40px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.metric-board h3 {
-  margin: 0 0 1.25rem;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.85rem;
-}
-
-.session-row,
-.terminal__row {
-  padding: 0.875rem 0;
-  transition: background 0.2s ease;
-}
-
-.session-row:hover,
-.terminal__row:hover {
-  background: rgba(255, 255, 255, 0.02);
-  margin: 0 -1rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  border-radius: 8px;
-}
-
-/* ========================================
-   Enhanced Action Grid
-   ======================================== */
-
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.875rem;
-}
-
-.action-grid button {
-  padding: 1.25rem;
-  text-align: left;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(140, 245, 197, 0.1);
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.action-grid button::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
-}
-
-.action-grid button:hover:not(:disabled)::before {
-  transform: scaleX(1);
-}
-
-.action-grid button:hover:not(:disabled) {
-  background: rgba(140, 245, 197, 0.05);
-  border-color: rgba(140, 245, 197, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(140, 245, 197, 0.15);
-}
-
-.action-grid button strong {
-  display: block;
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  color: var(--accent);
-}
-
-.action-grid button small {
-  display: block;
-  color: var(--muted);
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.action-grid button small:last-child {
-  margin-top: 0.75rem;
-  font-size: 0.75rem;
-  color: var(--accent-3);
-  font-weight: 600;
-}
-
-.action-grid button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.action-grid button:disabled:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: rgba(140, 245, 197, 0.1);
-  box-shadow: none;
-}
-
-/* ========================================
-   Enhanced Terminal
-   ======================================== */
-
-.terminal {
-  background: var(--panel-strong);
-  border: 1px solid rgba(125, 211, 255, 0.12);
-  font-family: var(--font-mono), monospace;
-}
-
-.terminal .eyebrow {
-  color: var(--accent-2);
-  margin-bottom: 1.25rem;
-}
-
-.terminal__value {
-  color: var(--accent-2);
-  font-weight: 600;
-}
-
-/* ========================================
-   Enhanced Input Shell
-   ======================================== */
-
-.input-shell {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(140, 245, 197, 0.12);
-  transition: all 0.25s ease;
-}
-
-.input-shell:focus-within {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(140, 245, 197, 0.3);
-  box-shadow: 0 0 0 3px rgba(140, 245, 197, 0.1);
-}
-
-.input-shell span {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.input-shell input {
-  font-family: var(--font-mono), monospace;
-  font-weight: 600;
-}
+/* Input shell styles moved to play.css */
 
 /* ========================================
    Responsive Adjustments
