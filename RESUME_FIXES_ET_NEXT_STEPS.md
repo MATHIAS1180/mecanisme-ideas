@@ -48,19 +48,26 @@ Status: ✅ Pushed to GitHub
 
 Le RPC public devnet ne peut PAS gérer l'app en temps réel. Tu DOIS configurer un RPC premium.
 
-#### Option 1: Helius (Recommandé) 🚀
+#### Option 1: Tatum (Le Plus Simple!) ⚡
+
+**Aucun compte requis, aucune API key!**
+
+1. **Copier URL**: `https://solana-devnet.gateway.tatum.io`
+2. **C'est tout!** Pas de compte à créer.
+
+#### Option 2: Helius (Plus de Features)
 
 1. **Créer compte**: https://helius.dev
 2. **Obtenir API key**: Dashboard > Create API Key
 3. **Copier URL**: `https://devnet.helius-rpc.com/?api-key=YOUR_API_KEY`
 
-#### Option 2: QuickNode
+#### Option 3: QuickNode
 
 1. **Créer compte**: https://quicknode.com
 2. **Créer endpoint**: Solana Devnet
 3. **Copier URL**: `https://your-endpoint.devnet.solana.quiknode.pro/YOUR_TOKEN/`
 
-#### Option 3: Alchemy
+#### Option 4: Alchemy
 
 1. **Créer compte**: https://alchemy.com
 2. **Créer app**: Solana Devnet
@@ -234,4 +241,8 @@ Tous les fixes sont appliqués et pushés sur GitHub. La seule chose qui reste �
 
 Sans RPC premium, l'app continuera à avoir des erreurs 429. Avec RPC premium, tout devrait fonctionner parfaitement avec <100ms latency.
 
-**Action immédiate**: Aller sur https://helius.dev, créer un compte, obtenir une API key, et l'ajouter dans Vercel.
+**Action immédiate**: 
+- **Option Simple**: Utiliser Tatum (pas de compte): `https://solana-devnet.gateway.tatum.io`
+- **Option Avancée**: Aller sur https://helius.dev, créer un compte, obtenir une API key
+
+Voir `SETUP_TATUM_RPC.md` pour le guide ultra-rapide (2 minutes).

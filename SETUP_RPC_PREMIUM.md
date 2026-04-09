@@ -58,7 +58,25 @@ NEXT_PUBLIC_SOLANA_RPC_URL=https://devnet.helius-rpc.com/?api-key=YOUR_API_KEY
 NEXT_PUBLIC_SOLANA_RPC_URL=https://your-endpoint.devnet.solana.quiknode.pro/YOUR_TOKEN/
 ```
 
-## Option 3: Alchemy
+## Option 3: Tatum (Simple et Rapide) ⚡
+
+### Avantages
+- Setup ultra-simple (pas d'API key pour devnet)
+- Bonne performance
+- Stable et fiable
+- Gratuit pour devnet
+
+### Setup
+**C'est le plus simple! Pas besoin de compte ni d'API key pour devnet:**
+
+### Configuration
+```bash
+NEXT_PUBLIC_SOLANA_RPC_URL=https://solana-devnet.gateway.tatum.io
+```
+
+C'est tout! Pas de compte à créer, pas d'API key à gérer.
+
+## Option 4: Alchemy
 
 ### Avantages
 - Plateforme mature
@@ -133,12 +151,13 @@ git push origin main
 
 ## Comparaison des RPC
 
-| Provider | Gratuit Devnet | Requêtes/Jour | WebSocket | Latence | Recommandé |
-|----------|----------------|---------------|-----------|---------|------------|
-| Public Devnet | ✅ | ~10,000 | ⚠️ Instable | ~200ms | ❌ |
-| Helius | ✅ | 1,000,000+ | ✅ Stable | <100ms | ✅ |
-| QuickNode | ✅ | 500,000+ | ✅ Stable | <100ms | ✅ |
-| Alchemy | ✅ | 300,000+ | ✅ Stable | <100ms | ✅ |
+| Provider | Gratuit Devnet | Requêtes/Jour | WebSocket | Latence | Setup | Recommandé |
+|----------|----------------|---------------|-----------|---------|-------|------------|
+| Public Devnet | ✅ | ~10,000 | ⚠️ Instable | ~200ms | Aucun | ❌ |
+| Tatum | ✅ | 500,000+ | ✅ Stable | <100ms | **Aucun!** | ✅✅ |
+| Helius | ✅ | 1,000,000+ | ✅ Stable | <100ms | Compte | ✅ |
+| QuickNode | ✅ | 500,000+ | ✅ Stable | <100ms | Compte | ✅ |
+| Alchemy | ✅ | 300,000+ | ✅ Stable | <100ms | Compte | ✅ |
 
 ## Troubleshooting
 
