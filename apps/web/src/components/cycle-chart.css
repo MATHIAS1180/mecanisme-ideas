@@ -1,0 +1,64 @@
+.cycle-chart {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #0a0e1a 0%, #050810 100%);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cycle-chart__canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+}
+
+.cycle-chart__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cycle-chart__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cycle-chart__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cycle-chart__value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+@media (max-width: 768px) {
+  .cycle-chart {
+    padding: 1rem;
+  }
+
+  .cycle-chart__stats {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .cycle-chart__value {
+    font-size: 1rem;
+  }
+}

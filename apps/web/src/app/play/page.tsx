@@ -8,7 +8,7 @@ import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../li
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, ENTRY_LAMPORTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { CycleGraphPro } from "../../components/cycle-graph-pro";
+import { CycleChart } from "../../components/cycle-chart";
 import { WinnerNotification } from "../../components/winner-notification";
 
 const ACTION_BUTTONS = [
@@ -37,7 +37,6 @@ export default function PlayPage() {
   const [userStake, setUserStake] = useState<string>("0.0000");
   const [cycleStatus, setCycleStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [autoResolving, setAutoResolving] = useState(false);
   const [lastTimerStart, setLastTimerStart] = useState<bigint | null>(null);
   const [lastCycleNumber, setLastCycleNumber] = useState<bigint | null>(null);
   const [showWinnerNotification, setShowWinnerNotification] = useState(false);
@@ -47,60 +46,19 @@ export default function PlayPage() {
 
   // Expose refreshLive pour pouvoir l'appeler après resolve
   const refreshLiveRef = useRef<() => void>(() => {});
-  // Auto-resolve : dès que le timer arrive à zéro, on envoie l'instruction automatiquement
-  useEffect(() => {
-    // Ne pas auto-resolve si:
-    // - Pas de vault
-    // - Pas de leader (cycle pas commencé ou déjà résolu)
-    // - Déjà en train de résoudre
-    // - Leader est l'adresse par défaut (11111...1)
-    if (
-      remainingSeconds === 0 && 
-      !autoResolving && 
-      programId && 
-      sessionWallet && 
-      vault && 
-      vault.leader && 
-      vault.leader !== "11111111111111111111111111111111"
-    ) {
-      setAutoResolving(true);
-      (async () => {
-        try {
-          setNotice("⏳ Résolution automatique du cycle en cours...");
-          const leader = new PublicKey(vault.leader);
-          const expiry = BigInt((await connection.getSlot()) + 90);
-          const instruction = buildActionInstruction({
-            action: "Resolve",
-            programId,
-            signer: sessionWallet.publicKey,
-            leader,
-            snipeExpirySlot: expiry,
-          });
-          const transaction = new Transaction().add(instruction);
-          transaction.feePayer = sessionWallet.publicKey;
-          transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-          transaction.sign(sessionWallet);
-          await connection.sendRawTransaction(transaction.serialize());
-          setNotice("✅ Cycle résolu avec succès ! Nouveau cycle prêt.");
-          setError(null);
-          // Forcer un refresh immédiat après resolve
-          setTimeout(() => {
-            if (refreshLiveRef.current) refreshLiveRef.current();
-          }, 1500);
-        } catch (err) {
-          setError("❌ Erreur lors de la résolution automatique : " + (err instanceof Error ? err.message : String(err)));
-        } finally {
-          setTimeout(() => setAutoResolving(false), 2500);
-        }
-      })();
-    }
-  }, [remainingSeconds, autoResolving, programId, sessionWallet, vault, connection]);
+  
+  // NOTE: L'auto-resolve est maintenant géré par le smart contract!
+  // Dès qu'une action (Deposit, Shield, etc.) est effectuée sur un cycle expiré,
+  // le smart contract résout automatiquement le cycle avant d'exécuter l'action.
+  // Plus besoin d'auto-resolve côté UI!
 
-  // Timer et données live : tout est recalculé à chaque tick (2s)
+  // Timer et données live : polling intelligent pour éviter les 429
   useEffect(() => {
     let active = true;
     let poller: number | null = null;
     let pauseTimeout: number | null = null;
+    let pollInterval = 3000; // Commence à 3 secondes
+    let errorCount = 0;
 
     async function refreshLive() {
       // Expose la fonction pour l'auto-resolve
@@ -136,7 +94,7 @@ export default function PlayPage() {
         const actualPot = Math.max(0, vaultBalance - rentReserve - carryOver);
         setPot(formatSolFromLamports(actualPot));
 
-        // 3. Timer live
+        // 3. Timer live (calculé une seule fois, le reste est côté client)
         const currentSlot = await connection.getSlot();
         let secondsLeft = 0;
         if (nextVault) {
@@ -146,7 +104,7 @@ export default function PlayPage() {
         }
         setRemainingSeconds(secondsLeft);
 
-        // 4. Solde session wallet
+        // 4. Solde session wallet (seulement si on en a un)
         if (sessionWallet) {
           const bal = await connection.getBalance(sessionWallet.publicKey);
           setSessionBalance(formatSolFromLamports(bal));
@@ -154,7 +112,7 @@ export default function PlayPage() {
           setSessionBalance("0.0000");
         }
 
-        // 5. Mise utilisateur (userState)
+        // 5. Mise utilisateur (userState) - optionnel
         if (sessionWallet && programId) {
           try {
             const { userState } = getNodusAccounts(programId, sessionWallet.publicKey);
@@ -173,7 +131,6 @@ export default function PlayPage() {
 
         // 6. Statut du cycle (gagné/perdu)
         if (nextVault && sessionWallet) {
-          // Seulement afficher le statut si un cycle vient de se terminer (leader existe encore)
           const cycleActive = nextVault.leader !== "11111111111111111111111111111111";
           if (secondsLeft === 0 && cycleActive && !isNewCycle) {
             if (nextVault.leader === sessionWallet.publicKey.toBase58()) {
@@ -182,7 +139,6 @@ export default function PlayPage() {
               setCycleStatus("Cycle perdu.");
             }
           } else if (!cycleActive) {
-            // Pas de cycle actif, clear le statut
             setCycleStatus("");
           }
         } else {
@@ -193,31 +149,60 @@ export default function PlayPage() {
         if (isNewCycle) {
           setNotice(null);
           setError(null);
-          setAutoResolving(false);
           setCycleStatus("");
         }
+
+        // Succès: réduire l'intervalle progressivement (mais pas trop)
+        errorCount = 0;
+        if (pollInterval > 3000) {
+          pollInterval = Math.max(3000, pollInterval - 500);
+        }
+        
       } catch (err) {
         if (!active) return;
-        // Gestion spéciale du 429 : pause le polling 10s
-        if (err && typeof err === "object" && "message" in err && String(err.message).includes("429")) {
-          setError("Trop de requêtes RPC (429). Pause 10s...");
+        
+        // Gestion intelligente des erreurs
+        const errorMessage = err && typeof err === "object" && "message" in err ? String(err.message) : "";
+        
+        if (errorMessage.includes("429")) {
+          // 429: Trop de requêtes - pause longue
+          setError("⏸️ Pause RPC (trop de requêtes). Reprise dans 15s...");
           if (poller) window.clearInterval(poller);
           poller = null;
           if (pauseTimeout) window.clearTimeout(pauseTimeout);
           pauseTimeout = window.setTimeout(() => {
             setError(null);
+            pollInterval = 5000; // Reprendre avec intervalle plus long
             if (active && !poller) {
-              poller = window.setInterval(refreshLive, 2000);
+              poller = window.setInterval(refreshLive, pollInterval);
             }
-          }, 10000);
+          }, 15000); // Pause 15 secondes
         } else {
-          setError(err instanceof Error ? err.message : "Erreur de rafraîchissement live.");
+          // Autre erreur: augmenter progressivement l'intervalle
+          errorCount++;
+          pollInterval = Math.min(10000, pollInterval + 1000 * errorCount);
+          setError(`⚠️ Erreur RPC. Retry dans ${pollInterval / 1000}s...`);
+          
+          // Si trop d'erreurs consécutives, pause plus longue
+          if (errorCount >= 3) {
+            if (poller) window.clearInterval(poller);
+            poller = null;
+            if (pauseTimeout) window.clearTimeout(pauseTimeout);
+            pauseTimeout = window.setTimeout(() => {
+              errorCount = 0;
+              pollInterval = 5000;
+              if (active && !poller) {
+                poller = window.setInterval(refreshLive, pollInterval);
+              }
+            }, 10000);
+          }
         }
       }
     }
 
     refreshLive(); // Premier appel immédiat
-    poller = window.setInterval(refreshLive, 2000);
+    poller = window.setInterval(refreshLive, pollInterval);
+    
     return () => {
       active = false;
       if (poller) window.clearInterval(poller);
@@ -319,12 +304,9 @@ export default function PlayPage() {
       return;
     }
 
-    // Si le timer est à zéro ET qu'un leader existe ET ce n'est pas un deposit, bloquer
-    const cycleActive = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
-    if (remainingSeconds === 0 && cycleActive && action !== "Resolve" && action !== "Deposit") {
-      setError("⏱️ Cycle terminé : il faut d'abord résoudre (Resolve) avant toute autre action.");
-      return;
-    }
+    // NOTE: Plus besoin de bloquer les actions quand timer à 0!
+    // Le smart contract gère l'auto-resolve automatiquement.
+    // Toute action sur un cycle expiré déclenchera l'auto-resolve puis l'action.
 
     setLoading(true);
     setError(null);
@@ -405,7 +387,7 @@ export default function PlayPage() {
           {/* Graphique principal */}
           <div className="play-main">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
-              <CycleGraphPro
+              <CycleChart
                 remainingSeconds={remainingSeconds}
                 maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
                 pressure={vault ? Number(vault.pressureCount) : 0}
@@ -523,9 +505,11 @@ export default function PlayPage() {
                   // - Pas de session wallet ou program ID
                   // - Timer=0 ET leader existe (cycle terminé, besoin de resolve)
                   // MAIS: Deposit est toujours autorisé si pas de leader (pour démarrer un nouveau cycle)
-                  const cycleActive = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
-                  const cycleEnded = remainingSeconds === 0 && cycleActive;
-                  const disabled = loading || autoResolving || !sessionWallet || !programId || (cycleEnded && action !== "Deposit");
+                  // Désactive les actions si:
+                  // - Loading
+                  // - Pas de session wallet ou program ID
+                  // NOTE: Plus besoin de désactiver quand timer à 0, le smart contract gère l'auto-resolve!
+                  const disabled = loading || !sessionWallet || !programId;
                   
                   // Emoji pour chaque action
                   const actionEmoji: Record<string, string> = {
@@ -551,11 +535,6 @@ export default function PlayPage() {
                     </button>
                   );
                 })}
-                {autoResolving && (
-                  <div style={{color: '#ffb100', marginTop: 8, fontWeight: 500, gridColumn: '1 / -1', textAlign: 'center'}}>
-                    ⏳ Résolution automatique du cycle en cours...
-                  </div>
-                )}
               </div>
             </article>
           </div>
