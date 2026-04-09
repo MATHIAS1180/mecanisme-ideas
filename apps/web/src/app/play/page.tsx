@@ -373,6 +373,19 @@ export default function PlayPage() {
             ⚠️ Aucun program ID configuré. Définis NEXT_PUBLIC_NODUS_PROGRAM_ID pour passer en mode devnet live.
           </div>
         ) : null}
+        {programId && vault === null && !loading ? (
+          <div className="notice notice--warning">
+            ⚠️ Le vault n'est pas initialisé. Clique sur le bouton ci-dessous pour l'initialiser (une seule fois).
+            <button 
+              className="button button--primary" 
+              onClick={handleInitialize} 
+              disabled={!connected || loading}
+              style={{marginTop: '1rem', display: 'block'}}
+            >
+              🚀 Initialize Vault
+            </button>
+          </div>
+        ) : null}
         {notice ? <div className="notice notice--success">{notice}</div> : null}
         {error ? <div className="notice notice--danger">{error}</div> : null}
         {latestSignature && (
