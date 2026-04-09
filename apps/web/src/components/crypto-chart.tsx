@@ -15,7 +15,7 @@ interface CryptoChartProps {
 export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leader, isActive }: CryptoChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataPoints, setDataPoints] = useState<number[]>([]);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);

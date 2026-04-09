@@ -101,13 +101,14 @@
   }
 }
 
-/* Desktop: 2 colonnes larges */
+/* Desktop: 2 colonnes larges, actions en 3 colonnes */
 @media (min-width: 1025px) {
   .play-container {
-    grid-template-columns: 1fr 450px;
+    grid-template-columns: 1fr 500px;
     grid-template-rows: auto;
-    height: calc(100vh - 200px);
+    height: calc(100vh - 180px);
     min-height: 700px;
+    max-height: 900px;
   }
 
   .play-main {
@@ -122,16 +123,56 @@
     grid-row: 1;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    overflow-y: auto;
+    gap: 1rem;
     height: 100%;
+    overflow: hidden;
+  }
+
+  /* Terminal compact */
+  .terminal {
+    padding: 1rem;
+    flex-shrink: 0;
+  }
+
+  .terminal__row {
+    padding: 0.5rem 0;
+  }
+
+  /* Session wallet compact */
+  .metric-board {
+    padding: 1rem;
+    flex-shrink: 0;
+  }
+
+  .session-row {
+    padding: 0.5rem 0;
+  }
+
+  .metric-board p {
+    font-size: 0.8rem;
+    margin: 0.5rem 0;
+  }
+
+  /* Actions en 3 colonnes pour gagner de l'espace */
+  .action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    overflow-y: auto;
+    flex: 1;
     padding-right: 0.5rem;
   }
 
-  .action-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+  .action-grid button {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .action-grid button strong {
+    font-size: 0.9rem;
+  }
+
+  .action-grid button small {
+    font-size: 0.75rem;
   }
 }
 
