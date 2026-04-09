@@ -16,21 +16,21 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
-  const lastRemainingRef = useRef<number>(remainingSeconds);
+  const cycleStartTimeRef = useRef<number>(Date.now());
+  const lastMaxSecondsRef = useRef<number>(maxSeconds);
 
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);
 
-  // Reset start time when remainingSeconds changes
+  // Reset cycle start time when cycle changes (maxSeconds changes or remainingSeconds increases)
   useEffect(() => {
-    if (remainingSeconds !== lastRemainingRef.current) {
-      startTimeRef.current = Date.now();
-      lastRemainingRef.current = remainingSeconds;
+    if (maxSeconds !== lastMaxSecondsRef.current || remainingSeconds > lastMaxSecondsRef.current) {
+      cycleStartTimeRef.current = Date.now() - ((maxSeconds - remainingSeconds) * 1000);
+      lastMaxSecondsRef.current = maxSeconds;
     }
-  }, [remainingSeconds]);
+  }, [remainingSeconds, maxSeconds]);
 
-  // Générer courbe: monte de 0 à pot, puis descend avec le timer - SMOOTH 120 FPS
+  // Générer courbe: ANIMATION CONTINUE FLUIDE
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
@@ -40,13 +40,11 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     let animFrame: number;
     
     const updateCurve = () => {
-      // Calculer le temps écoulé depuis la dernière seconde avec interpolation
+      // Calculer le temps écoulé depuis le début du cycle avec précision milliseconde
       const now = Date.now();
-      const msSinceLastSecond = (now - startTimeRef.current) % 1000;
-      const interpolatedRemaining = remainingSeconds - (msSinceLastSecond / 1000);
-      
-      const elapsed = maxSeconds - interpolatedRemaining;
-      const progress = Math.min(Math.max(elapsed / maxSeconds, 0), 1);
+      const elapsedMs = now - cycleStartTimeRef.current;
+      const elapsedSeconds = elapsedMs / 1000;
+      const progress = Math.min(Math.max(elapsedSeconds / maxSeconds, 0), 1);
       
       const points: number[] = [];
       const numPoints = 60;
@@ -58,7 +56,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         const t = i / numPoints;
         
         if (t <= 0.15) {
-          // Phase montée (15% du temps): 0 → potValue
+          // Phase montée (15% du temps): 0 → potValue - INSTANTANÉ
           const riseProgress = t / 0.15;
           points.push(potValue * riseProgress);
         } else {
@@ -85,7 +83,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         cancelAnimationFrame(animFrame);
       }
     };
-  }, [remainingSeconds, maxSeconds, potValue, isActive]);
+  }, [maxSeconds, potValue, isActive]);
 
   // Animation 120 FPS
   useEffect(() => {
@@ -131,15 +129,15 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         ctx.stroke();
       }
 
-      // Labels Y-axis
+      // Labels Y-axis - EN SECONDES
       ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
       ctx.font = "11px monospace";
       ctx.textAlign = "left";
       
       for (let i = 0; i <= 5; i++) {
-        const value = maxPot * (1 - i / 5);
+        const seconds = maxSeconds * (1 - i / 5);
         const y = padding.top + (chartHeight / 5) * i;
-        ctx.fillText(value.toFixed(4), width - padding.right + 5, y + 4);
+        ctx.fillText(Math.floor(seconds) + "s", width - padding.right + 5, y + 4);
       }
 
       // Courbe
