@@ -120,15 +120,29 @@ export class RealtimeVault {
    * Vérifier si deux vaults sont identiques (évite les updates inutiles)
    */
   private isIdenticalVault(a: NodusVault, b: NodusVault): boolean {
-    return (
+    // Comparaison stricte de tous les champs critiques
+    const identical = (
       a.cycleNumber === b.cycleNumber &&
       a.leader === b.leader &&
       a.timerStartSlot === b.timerStartSlot &&
+      a.timerResetSlots === b.timerResetSlots &&
       a.pressureCount === b.pressureCount &&
       a.terminalLock === b.terminalLock &&
       a.curseCount === b.curseCount &&
-      a.carryOverLamports === b.carryOverLamports
+      a.carryOverLamports === b.carryOverLamports &&
+      a.lastResolvedWinner === b.lastResolvedWinner
     );
+    
+    if (!identical) {
+      console.log("🔄 Vault changed:", {
+        cycleChanged: a.cycleNumber !== b.cycleNumber,
+        leaderChanged: a.leader !== b.leader,
+        timerChanged: a.timerStartSlot !== b.timerStartSlot,
+        pressureChanged: a.pressureCount !== b.pressureCount,
+      });
+    }
+    
+    return identical;
   }
 
   /**

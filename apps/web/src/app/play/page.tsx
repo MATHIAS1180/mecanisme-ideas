@@ -69,6 +69,13 @@ export default function PlayPage() {
       // Détecte si c'est un nouveau cycle
       const isNewCycle = vault && nextVault.cycleNumber !== vault.cycleNumber;
       
+      if (isNewCycle) {
+        console.log("🎉 NOUVEAU CYCLE DÉTECTÉ!", {
+          ancien: vault.cycleNumber.toString(),
+          nouveau: nextVault.cycleNumber.toString(),
+        });
+      }
+      
       // Si nouveau cycle ET qu'il y a un gagnant précédent, afficher la notification
       if (isNewCycle && nextVault.lastResolvedWinner && nextVault.lastResolvedWinner !== "11111111111111111111111111111111") {
         setWinnerData({
@@ -99,14 +106,16 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // 🔄 POLLING DE SECOURS: Refresh toutes les 2 secondes pour garantir la sync
+  // 🔄 POLLING AGRESSIF: Refresh toutes les 500ms pour garantir la sync
   useEffect(() => {
     if (!programId || !realtimeVaultRef.current) return;
 
+    let pollCount = 0;
     const pollInterval = setInterval(() => {
-      console.log("🔄 Polling de secours: refresh manuel");
+      pollCount++;
+      console.log(`🔄 Polling #${pollCount}: refresh manuel`);
       realtimeVaultRef.current?.refresh();
-    }, 2000); // Toutes les 2 secondes
+    }, 500); // Toutes les 500ms (2x par seconde)
 
     return () => clearInterval(pollInterval);
   }, [programId]);
@@ -124,6 +133,16 @@ export default function PlayPage() {
         const slotEnd = Number(vault.timerStartSlot) + Number(vault.timerResetSlots);
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
+        
+        // Si le timer vient d'atteindre 0, force un refresh agressif
+        if (secondsLeft === 0 && remainingSeconds > 0) {
+          console.log("⏰ Timer reached 0! Forcing aggressive refresh...");
+          // Force 3 refreshs rapides pour être sûr de capter le changement
+          setTimeout(() => realtimeVaultRef.current?.refresh(), 100);
+          setTimeout(() => realtimeVaultRef.current?.refresh(), 500);
+          setTimeout(() => realtimeVaultRef.current?.refresh(), 1000);
+        }
+        
         setRemainingSeconds(secondsLeft);
       } catch (error) {
         console.error("Error updating timer:", error);
@@ -137,7 +156,7 @@ export default function PlayPage() {
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [vault, connection]);
+  }, [vault, connection, remainingSeconds]);
 
   // Polling léger pour les données secondaires (pot, balances) - toutes les 5 secondes
   useEffect(() => {
