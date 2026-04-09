@@ -214,7 +214,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       <canvas 
         ref={canvasRef} 
         className="crypto-chart__canvas"
-        style={{ height: 'clamp(250px, 40vh, 450px)' }}
+        style={{ height: 'clamp(200px, 35vh, 380px)' }}
       />
       <div className="crypto-chart__stats">
         <div className="crypto-chart__stat">

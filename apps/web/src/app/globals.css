@@ -488,8 +488,8 @@ input {
   position: relative;
   background: linear-gradient(135deg, rgba(140, 245, 197, 0.08) 0%, rgba(125, 211, 255, 0.05) 100%);
   border: 1px solid rgba(140, 245, 197, 0.15);
-  border-radius: clamp(14px, 2vw, 20px);
-  padding: clamp(1rem, 2vh, 1.75rem);
+  border-radius: clamp(12px, 1.5vw, 16px);
+  padding: clamp(0.75rem, 1.5vh, 1.25rem);
   overflow: hidden;
   backdrop-filter: blur(20px);
   box-shadow: 
@@ -764,16 +764,16 @@ input {
   justify-content: center;
   min-height: 100%;
   flex: 1;
-  padding: clamp(1.5rem, 3vh, 2.5rem);
+  padding: clamp(0.75rem, 1.5vh, 1.5rem);
   text-align: center;
-  gap: clamp(0.75rem, 1.5vh, 1.15rem);
+  gap: clamp(0.4rem, 0.8vh, 0.7rem);
 }
 
 .cycle-graph__empty-icon {
-  font-size: clamp(3rem, 6vh, 4.5rem);
-  margin-bottom: clamp(0.5rem, 1vh, 0.85rem);
+  font-size: clamp(2rem, 4vh, 3rem);
+  margin-bottom: clamp(0.25rem, 0.5vh, 0.4rem);
   animation: float 3s ease-in-out infinite;
-  filter: drop-shadow(0 0 20px rgba(140, 245, 197, 0.3));
+  filter: drop-shadow(0 0 15px rgba(140, 245, 197, 0.25));
 }
 
 @keyframes float {
@@ -786,22 +786,23 @@ input {
 }
 
 .cycle-graph__empty h3 {
-  font-size: clamp(1.25rem, 2.5vh, 1.65rem);
+  font-size: clamp(1rem, 2vh, 1.3rem);
   font-weight: 800;
   background: linear-gradient(135deg, #8cf5c5 0%, #7dd3ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .cycle-graph__empty p {
-  font-size: clamp(0.9rem, 1.5vh, 1rem);
+  font-size: clamp(0.75rem, 1.2vh, 0.9rem);
   color: rgba(255, 255, 255, 0.7);
-  margin: clamp(0.35rem, 0.7vh, 0.45rem) 0;
-  max-width: 450px;
-  line-height: 1.5;
+  margin: clamp(0.2rem, 0.4vh, 0.3rem) 0;
+  max-width: 400px;
+  line-height: 1.4;
 }
 
 .cycle-graph__empty p.muted {
