@@ -10,6 +10,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { CycleChart } from "../../components/cycle-chart";
 import { WinnerNotification } from "../../components/winner-notification";
+import { RealtimeVault } from "../../lib/realtime-vault";
 
 const ACTION_BUTTONS = [
   ["Deposit", "Take leadership and reset the timer."],
@@ -46,73 +47,92 @@ export default function PlayPage() {
 
   // Expose refreshLive pour pouvoir l'appeler après resolve
   const refreshLiveRef = useRef<() => void>(() => {});
+  const realtimeVaultRef = useRef<RealtimeVault | null>(null);
   
   // NOTE: L'auto-resolve est maintenant géré par le smart contract!
   // Dès qu'une action (Deposit, Shield, etc.) est effectuée sur un cycle expiré,
   // le smart contract résout automatiquement le cycle avant d'exécuter l'action.
   // Plus besoin d'auto-resolve côté UI!
 
-  // Timer et données live : polling intelligent pour éviter les 429
+  // WebSocket real-time updates (pas de polling!)
   useEffect(() => {
-    let active = true;
-    let poller: number | null = null;
-    let pauseTimeout: number | null = null;
-    let pollInterval = 3000; // Commence à 3 secondes
-    let errorCount = 0;
+    if (!programId) return;
 
-    async function refreshLive() {
-      // Expose la fonction pour l'auto-resolve
-      refreshLiveRef.current = refreshLive;
-      if (!programId) return;
+    const { vault: vaultPda } = getNodusAccounts(programId, programId);
+    const realtimeVault = new RealtimeVault(connection, vaultPda);
+    realtimeVaultRef.current = realtimeVault;
+
+    // Listener pour les changements de vault
+    const handleVaultChange = (nextVault: NodusVault | null) => {
+      if (!nextVault) return;
+
+      // Détecte si c'est un nouveau cycle
+      const isNewCycle = vault && nextVault.cycleNumber !== vault.cycleNumber;
       
-      try {
-        // 1. Vault (leader, slots...)
-        const nextVault = await fetchVault(connection, programId);
-        if (!active) return;
-        
-        // Détecte si c'est un nouveau cycle
-        const isNewCycle = nextVault && vault && nextVault.cycleNumber !== vault.cycleNumber;
-        
-        // Si nouveau cycle ET qu'il y a un gagnant précédent, afficher la notification
-        if (isNewCycle && nextVault.lastResolvedWinner && nextVault.lastResolvedWinner !== "11111111111111111111111111111111") {
-          setWinnerData({
-            winner: nextVault.lastResolvedWinner,
-            payout: formatSolFromLamports(Number(nextVault.lastResolvedPayout)),
-          });
-          setShowWinnerNotification(true);
-        }
-        
-        setVault(nextVault);
-        setLastTimerStart(nextVault ? nextVault.timerStartSlot : null);
-        setLastCycleNumber(nextVault ? nextVault.cycleNumber : null);
+      // Si nouveau cycle ET qu'il y a un gagnant précédent, afficher la notification
+      if (isNewCycle && nextVault.lastResolvedWinner && nextVault.lastResolvedWinner !== "11111111111111111111111111111111") {
+        setWinnerData({
+          winner: nextVault.lastResolvedWinner,
+          payout: formatSolFromLamports(Number(nextVault.lastResolvedPayout)),
+        });
+        setShowWinnerNotification(true);
+      }
+      
+      setVault(nextVault);
+      setLastTimerStart(nextVault.timerStartSlot);
+      setLastCycleNumber(nextVault.cycleNumber);
 
-        // 2. Pot = solde du compte vault (PDA) - rent reserve - carry-over
+      // Calculer le timer
+      connection.getSlot().then((currentSlot) => {
+        const slotEnd = Number(nextVault.timerStartSlot) + Number(nextVault.timerResetSlots);
+        const slotsLeft = Math.max(0, slotEnd - currentSlot);
+        const secondsLeft = Math.floor(slotsLeft * 0.45);
+        setRemainingSeconds(secondsLeft);
+      });
+
+      // Si nouveau cycle, clear les messages
+      if (isNewCycle) {
+        setNotice(null);
+        setError(null);
+        setCycleStatus("");
+      }
+    };
+
+    realtimeVault.addListener(handleVaultChange);
+    realtimeVault.subscribe();
+
+    return () => {
+      realtimeVault.removeListener(handleVaultChange);
+      realtimeVault.unsubscribe();
+    };
+  }, [programId, connection, vault]);
+
+  // Polling léger pour les données secondaires (pot, balances) - toutes les 5 secondes
+  useEffect(() => {
+    if (!programId) return;
+
+    let active = true;
+    let interval: number | null = null;
+
+    async function updateSecondaryData() {
+      if (!active || !programId) return;
+
+      try {
+        // Pot
         const { vault: vaultPda } = getNodusAccounts(programId, programId);
         const vaultBalance = await connection.getBalance(vaultPda);
-        const rentReserve = 2_000_000; // ~0.002 SOL pour le rent du vault
-        const carryOver = nextVault ? Number(nextVault.carryOverLamports) : 0;
+        const rentReserve = 2_000_000;
+        const carryOver = vault ? Number(vault.carryOverLamports) : 0;
         const actualPot = Math.max(0, vaultBalance - rentReserve - carryOver);
         setPot(formatSolFromLamports(actualPot));
 
-        // 3. Timer live (calculé une seule fois, le reste est côté client)
-        const currentSlot = await connection.getSlot();
-        let secondsLeft = 0;
-        if (nextVault) {
-          const slotEnd = Number(nextVault.timerStartSlot) + Number(nextVault.timerResetSlots);
-          const slotsLeft = Math.max(0, slotEnd - currentSlot);
-          secondsLeft = Math.floor(slotsLeft * 0.45);
-        }
-        setRemainingSeconds(secondsLeft);
-
-        // 4. Solde session wallet (seulement si on en a un)
+        // Session wallet balance
         if (sessionWallet) {
           const bal = await connection.getBalance(sessionWallet.publicKey);
           setSessionBalance(formatSolFromLamports(bal));
-        } else {
-          setSessionBalance("0.0000");
         }
 
-        // 5. Mise utilisateur (userState) - optionnel
+        // User stake (optionnel)
         if (sessionWallet && programId) {
           try {
             const { userState } = getNodusAccounts(programId, sessionWallet.publicKey);
@@ -125,90 +145,20 @@ export default function PlayPage() {
           } catch {
             setUserStake("0.0000");
           }
-        } else {
-          setUserStake("0.0000");
         }
-
-        // 6. Statut du cycle (gagné/perdu)
-        if (nextVault && sessionWallet) {
-          const cycleActive = nextVault.leader !== "11111111111111111111111111111111";
-          if (secondsLeft === 0 && cycleActive && !isNewCycle) {
-            if (nextVault.leader === sessionWallet.publicKey.toBase58()) {
-              setCycleStatus("Cycle gagné ! 🎉");
-            } else {
-              setCycleStatus("Cycle perdu.");
-            }
-          } else if (!cycleActive) {
-            setCycleStatus("");
-          }
-        } else {
-          setCycleStatus("");
-        }
-        
-        // Si nouveau cycle détecté, clear les messages et états
-        if (isNewCycle) {
-          setNotice(null);
-          setError(null);
-          setCycleStatus("");
-        }
-
-        // Succès: réduire l'intervalle progressivement (mais pas trop)
-        errorCount = 0;
-        if (pollInterval > 3000) {
-          pollInterval = Math.max(3000, pollInterval - 500);
-        }
-        
-      } catch (err) {
-        if (!active) return;
-        
-        // Gestion intelligente des erreurs
-        const errorMessage = err && typeof err === "object" && "message" in err ? String(err.message) : "";
-        
-        if (errorMessage.includes("429")) {
-          // 429: Trop de requêtes - pause longue
-          setError("⏸️ Pause RPC (trop de requêtes). Reprise dans 15s...");
-          if (poller) window.clearInterval(poller);
-          poller = null;
-          if (pauseTimeout) window.clearTimeout(pauseTimeout);
-          pauseTimeout = window.setTimeout(() => {
-            setError(null);
-            pollInterval = 5000; // Reprendre avec intervalle plus long
-            if (active && !poller) {
-              poller = window.setInterval(refreshLive, pollInterval);
-            }
-          }, 15000); // Pause 15 secondes
-        } else {
-          // Autre erreur: augmenter progressivement l'intervalle
-          errorCount++;
-          pollInterval = Math.min(10000, pollInterval + 1000 * errorCount);
-          setError(`⚠️ Erreur RPC. Retry dans ${pollInterval / 1000}s...`);
-          
-          // Si trop d'erreurs consécutives, pause plus longue
-          if (errorCount >= 3) {
-            if (poller) window.clearInterval(poller);
-            poller = null;
-            if (pauseTimeout) window.clearTimeout(pauseTimeout);
-            pauseTimeout = window.setTimeout(() => {
-              errorCount = 0;
-              pollInterval = 5000;
-              if (active && !poller) {
-                poller = window.setInterval(refreshLive, pollInterval);
-              }
-            }, 10000);
-          }
-        }
+      } catch (error) {
+        console.error("Error updating secondary data:", error);
       }
     }
 
-    refreshLive(); // Premier appel immédiat
-    poller = window.setInterval(refreshLive, pollInterval);
-    
+    updateSecondaryData(); // Initial
+    interval = window.setInterval(updateSecondaryData, 5000); // Toutes les 5 secondes
+
     return () => {
       active = false;
-      if (poller) window.clearInterval(poller);
-      if (pauseTimeout) window.clearTimeout(pauseTimeout);
+      if (interval) window.clearInterval(interval);
     };
-  }, [connection, programId, sessionWallet, vault]);
+  }, [programId, connection, sessionWallet, vault]);
 
 
 
