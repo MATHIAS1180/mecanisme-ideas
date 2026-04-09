@@ -45,7 +45,7 @@ export function CycleChart({
     }, 16); // 60 FPS
 
     return () => clearInterval(interval);
-  }, [isActive, localTimer, initialTimerRef.current]);
+  }, [isActive, localTimer]);
 
   // Dessin du graphique
   useEffect(() => {

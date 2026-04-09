@@ -278,7 +278,7 @@ export default function PlayPage() {
           curseCount: Math.min(5, vault.curseCount + 1),
         },
         Blizzard: {
-          pressureCount: Math.min(40, vault.pressureCount + 1),
+          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
         },
       };
 
