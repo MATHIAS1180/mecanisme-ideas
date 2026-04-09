@@ -27,11 +27,7 @@ function decodeVault(data: Buffer) {
   const initialized = data.readUInt8(offset) === 1;
   offset += 1;
   
-  // Read leader (32 bytes) - BEFORE protocol_fee_bps!
-  const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
-  offset += 32;
-  
-  // Read leader (32 bytes) - BEFORE protocol_fee_bps!
+  // Read leader (32 bytes)
   const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
   offset += 32;
   
@@ -63,17 +59,13 @@ function decodeVault(data: Buffer) {
   const shieldExpiresSlot = data.readBigUInt64LE(offset);
   offset += 8;
   
-  // Read anchor_count (1 byte) - u8 not u32!
+  // Read anchor_count (1 byte)
   const anchorCount = data.readUInt8(offset);
   offset += 1;
   
-  // Read curse_count (1 byte) - u8 not u32!
+  // Read curse_count (1 byte)
   const curseCount = data.readUInt8(offset);
   offset += 1;
-  
-  // Read carry_over_lamports (8 bytes)
-  const carryOverLamports = data.readBigUInt64LE(offset);
-  offset += 8;
   
   // Read carry_over_lamports (8 bytes)
   const carryOverLamports = data.readBigUInt64LE(offset);
@@ -87,13 +79,9 @@ function decodeVault(data: Buffer) {
   const activeSnipeExpirySlot = data.readBigUInt64LE(offset);
   offset += 8;
   
-  // Read protocol_fee_bps (2 bytes) - AFTER snipe fields!
+  // Read protocol_fee_bps (2 bytes)
   const protocolFeeBps = data.readUInt16LE(offset);
   offset += 2;
-  
-  // Read active_snipe_escrow_lamports (8 bytes)
-  const activeSnipeEscrowLamports = data.readBigUInt64LE(offset);
-  offset += 8;
   
   // Read active_snipe_escrow_lamports (8 bytes)
   const activeSnipeEscrowLamports = data.readBigUInt64LE(offset);
