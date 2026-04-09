@@ -8,7 +8,7 @@ import { formatCountdown, formatSolFromLamports, shortenAddress } from "../../li
 import { DEFAULT_RPC_URL, FEE_WALLET, MIN_RESET_SLOTS, MAX_RESET_SLOTS, ENTRY_LAMPORTS, type NodusVault } from "@nodus/sdk";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { CycleChart } from "../../components/cycle-chart";
+import { CryptoChart } from "../../components/crypto-chart";
 import { WinnerNotification } from "../../components/winner-notification";
 import { RealtimeVault } from "../../lib/realtime-vault";
 
@@ -106,6 +106,54 @@ export default function PlayPage() {
       realtimeVault.unsubscribe();
     };
   }, [programId, connection, vault]);
+
+  // 🚀 AUTO-RESOLVE automatique quand le timer atteint 0
+  useEffect(() => {
+    if (!programId || !sessionWallet || !vault) return;
+    if (remainingSeconds !== 0) return; // Seulement quand timer = 0
+    if (!vault.leader || vault.leader === "11111111111111111111111111111111") return; // Pas de leader = pas de cycle actif
+    if (loading) return; // Éviter les appels multiples
+
+    // Attendre 2 secondes après que le timer atteint 0, puis auto-resolve
+    const autoResolveTimer = setTimeout(async () => {
+      console.log("🤖 Auto-resolve: Timer expiré, résolution automatique du cycle...");
+      
+      try {
+        setLoading(true);
+        const expiry = BigInt((await connection.getSlot()) + 90);
+        const leaderPubkey = new PublicKey(vault.leader);
+        const instruction = buildActionInstruction({
+          action: "Resolve",
+          programId,
+          signer: sessionWallet.publicKey,
+          leader: leaderPubkey,
+          snipeExpirySlot: expiry,
+        });
+        const transaction = new Transaction().add(instruction);
+        transaction.feePayer = sessionWallet.publicKey;
+        transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        transaction.sign(sessionWallet);
+        const signature = await connection.sendRawTransaction(transaction.serialize());
+        
+        console.log("✅ Auto-resolve réussi:", signature);
+        setNotice("🤖 Cycle résolu automatiquement !");
+        
+        // Refresh après 500ms
+        setTimeout(() => {
+          if (realtimeVaultRef.current) {
+            realtimeVaultRef.current.refresh();
+          }
+        }, 500);
+      } catch (error) {
+        console.error("❌ Erreur auto-resolve:", error);
+        // Ne pas afficher d'erreur à l'utilisateur, c'est automatique
+      } finally {
+        setLoading(false);
+      }
+    }, 2000); // 2 secondes après que le timer atteint 0
+
+    return () => clearTimeout(autoResolveTimer);
+  }, [remainingSeconds, vault, programId, sessionWallet, connection, loading]);
 
   // Polling léger pour les données secondaires (pot, balances) - toutes les 5 secondes
   useEffect(() => {
@@ -372,7 +420,7 @@ export default function PlayPage() {
           {/* Graphique principal */}
           <div className="play-main">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
-              <CycleChart
+              <CryptoChart
                 remainingSeconds={remainingSeconds}
                 maxSeconds={vault ? Number(vault.timerResetSlots) * 0.45 : MAX_RESET_SLOTS * 0.45}
                 pressure={vault ? Number(vault.pressureCount) : 0}
@@ -485,15 +533,6 @@ export default function PlayPage() {
               <div className="action-grid">
                 {ACTION_BUTTONS.filter(([action]) => action !== "Resolve").map(([action, body]) => {
                   const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
-                  // Désactive les actions si:
-                  // - Loading ou auto-resolving
-                  // - Pas de session wallet ou program ID
-                  // - Timer=0 ET leader existe (cycle terminé, besoin de resolve)
-                  // MAIS: Deposit est toujours autorisé si pas de leader (pour démarrer un nouveau cycle)
-                  // Désactive les actions si:
-                  // - Loading
-                  // - Pas de session wallet ou program ID
-                  // NOTE: Plus besoin de désactiver quand timer à 0, le smart contract gère l'auto-resolve!
                   const disabled = loading || !sessionWallet || !programId;
                   
                   // Emoji pour chaque action
