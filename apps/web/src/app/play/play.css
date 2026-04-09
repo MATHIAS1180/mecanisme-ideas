@@ -70,7 +70,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - 180px) !important;
 }
 
 /* Control cards - COMPACT */
@@ -204,7 +204,7 @@
 .game-chart > * {
   width: 100%;
   height: 100%;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - 180px) !important;
 }
 
 /* Actions vertical - COMPACT BUTTONS */
@@ -405,4 +405,45 @@
 .sidebar-left::-webkit-scrollbar-thumb:hover,
 .sidebar-right::-webkit-scrollbar-thumb:hover {
   background: rgba(140, 245, 197, 0.35);
+}
+/* Cycle graph container - FIT TO SPACE - FORCE COMPACT */
+.cycle-graph {
+  width: 100% !important;
+  height: auto !important;
+  max-height: calc(100vh - 200px) !important;
+  min-height: 250px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  padding: clamp(0.5rem, 1vh, 0.85rem) !important;
+}
+
+.cycle-graph__empty {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 200px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+  gap: clamp(0.35rem, 0.7vh, 0.6rem) !important;
+}
+
+.cycle-graph__empty-icon {
+  font-size: clamp(1.75rem, 3.5vh, 2.5rem) !important;
+  margin-bottom: clamp(0.25rem, 0.5vh, 0.4rem) !important;
+}
+
+.cycle-graph__empty h3 {
+  font-size: clamp(0.95rem, 1.8vh, 1.2rem) !important;
+  margin: clamp(0.25rem, 0.5vh, 0.4rem) 0 !important;
+  line-height: 1.2 !important;
+}
+
+.cycle-graph__empty p {
+  font-size: clamp(0.75rem, 1.2vh, 0.85rem) !important;
+  margin: clamp(0.15rem, 0.3vh, 0.25rem) 0 !important;
+  line-height: 1.3 !important;
 }
