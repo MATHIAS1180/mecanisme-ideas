@@ -339,10 +339,6 @@ export default function PlayPage() {
 
   return (
     <>
-      <section className="page-title-compact shell">
-        <h1>Operate the live cycle.</h1>
-      </section>
-
       <section className="section shell">
         {!programId && (
           <div className="notice notice--warning">⚠️ Aucun program ID configuré.</div>
@@ -372,9 +368,57 @@ export default function PlayPage() {
           </div>
         )}
 
-        <div className="play-grid-compact">
-          {/* Chart */}
-          <div className="play-chart-compact">
+        {/* Stats bar en haut */}
+        <div className="stats-bar">
+          <div className="stat-item">
+            <span className="stat-label">Cycle</span>
+            <strong className="stat-value">{vault ? String(vault.cycleNumber) : "-"}</strong>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Leader</span>
+            <strong className="stat-value">{shortenAddress(vault?.leader || "Live")}</strong>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Timer</span>
+            <strong className="stat-value">{formatCountdown(remainingSeconds)}</strong>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Pot</span>
+            <strong className="stat-value">{pot} SOL</strong>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Pressure</span>
+            <strong className="stat-value">{vault ? String(vault.pressureCount) : "-"}/40</strong>
+          </div>
+        </div>
+
+        {/* Layout principal: Chart au centre, contrôles sur les côtés */}
+        <div className="game-layout">
+          {/* Sidebar gauche: Wallet */}
+          <div className="sidebar-left">
+            <div className="control-card">
+              <h3>💳 Wallet</h3>
+              <div className="compact-stats">
+                <div><span>Main</span><strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong></div>
+                <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
+                <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
+              </div>
+              <div className="wallet-actions">
+                <input 
+                  type="text" 
+                  value={budget} 
+                  onChange={(e) => setBudget(e.target.value)} 
+                  placeholder="0.03"
+                  className="compact-input"
+                />
+                <button className="btn-compact btn-primary" onClick={handleFundSession} disabled={loading}>Fund</button>
+                <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chart central */}
+          <div className="game-chart">
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
               <CryptoChart
                 remainingSeconds={remainingSeconds}
@@ -395,59 +439,30 @@ export default function PlayPage() {
             )}
           </div>
 
-          {/* Telemetry */}
-          <div className="control-card">
-            <h3>📊 Telemetry</h3>
-            <div className="compact-stats">
-              <div><span>Cycle</span><strong>{vault ? String(vault.cycleNumber) : "-"}</strong></div>
-              <div><span>Leader</span><strong>{shortenAddress(vault?.leader || "Live")}</strong></div>
-              <div><span>Timer</span><strong>{formatCountdown(remainingSeconds)}</strong></div>
-              <div><span>Pot</span><strong>{pot} SOL</strong></div>
-              <div><span>Pressure</span><strong>{vault ? String(vault.pressureCount) : "-"}/40</strong></div>
-            </div>
-          </div>
-
-          {/* Wallet */}
-          <div className="control-card">
-            <h3>💳 Wallet</h3>
-            <div className="compact-stats">
-              <div><span>Main</span><strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong></div>
-              <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
-              <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
-            </div>
-            <div className="wallet-actions">
-              <input 
-                type="text" 
-                value={budget} 
-                onChange={(e) => setBudget(e.target.value)} 
-                placeholder="0.03"
-                className="compact-input"
-              />
-              <button className="btn-compact btn-primary" onClick={handleFundSession} disabled={loading}>Fund</button>
-              <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="control-card actions-card-full">
-            <h3>⚡ Actions</h3>
-            <div className="actions-compact-grid">
-              {ACTION_BUTTONS.map(([action, desc, emoji]) => {
-                const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
-                return (
-                  <button
-                    key={action}
-                    onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
-                    disabled={loading || !sessionWallet || !programId}
-                    className="action-btn-compact"
-                    title={desc}
-                  >
-                    <span className="action-emoji">{emoji}</span>
-                    <span className="action-name">{action}</span>
-                    <span className="action-cost">{cost}</span>
-                  </button>
-                );
-              })}
+          {/* Sidebar droite: Actions */}
+          <div className="sidebar-right">
+            <div className="control-card">
+              <h3>⚡ Actions</h3>
+              <div className="actions-vertical">
+                {ACTION_BUTTONS.map(([action, desc, emoji]) => {
+                  const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
+                  return (
+                    <button
+                      key={action}
+                      onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
+                      disabled={loading || !sessionWallet || !programId}
+                      className="action-btn-vertical"
+                      title={desc}
+                    >
+                      <span className="action-emoji">{emoji}</span>
+                      <div className="action-info">
+                        <span className="action-name">{action}</span>
+                        <span className="action-cost">{cost} SOL</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
