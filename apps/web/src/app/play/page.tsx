@@ -107,7 +107,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // ⏱️ Timer update continu + AUTO-RESOLVE automatique
+  // ⏱️ Timer update continu
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
@@ -116,36 +116,19 @@ export default function PlayPage() {
 
     const updateTimer = async () => {
       try {
-        const currentSlot = await connection.getSlot("finalized");
+        const currentSlot = await connection.getSlot("confirmed");
         const slotEnd = Number(vault.timerStartSlot) + Number(vault.timerResetSlots);
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
         
-        // 🚨 AUTO-RESOLVE: Si timer à 0 depuis >3s ET session wallet disponible
-        if (secondsLeft === 0 && remainingSeconds === 0 && sessionWallet) {
-          const now = Date.now();
-          if (!lastZeroTimeRef.current) {
-            lastZeroTimeRef.current = now;
-          } else if (now - lastZeroTimeRef.current > 3000 && !loading) {
-            // Timer à 0 depuis >3s = envoyer un Deposit pour trigger auto-resolve
-            console.log("⚡ AUTO-RESOLVE: Envoi Deposit automatique pour résoudre le cycle...");
-            lastZeroTimeRef.current = now + 10000; // Éviter spam (10s cooldown)
-            
-            // Envoyer Deposit en arrière-plan (va trigger auto-resolve dans smart contract)
-            handleAction("Deposit").catch(err => {
-              console.error("❌ Auto-resolve failed:", err);
-              // Retry dans 5s
-              setTimeout(() => {
-                lastZeroTimeRef.current = Date.now() - 2000; // Reset pour retry
-              }, 5000);
-            });
-          }
-        } else if (secondsLeft > 0) {
-          // Reset le compteur si timer > 0
-          lastZeroTimeRef.current = null;
-        }
-        
         setRemainingSeconds(secondsLeft);
+        
+        // Status message quand timer expire
+        if (secondsLeft === 0 && remainingSeconds > 0) {
+          setCycleStatus("⏳ Cycle expiré - Le keeper bot va le résoudre automatiquement...");
+        } else if (secondsLeft > 0) {
+          setCycleStatus("");
+        }
       } catch (error) {
         console.error("Error updating timer:", error);
       }
@@ -158,7 +141,7 @@ export default function PlayPage() {
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [vault, connection, remainingSeconds, sessionWallet, loading]);
+  }, [vault, connection, remainingSeconds]);
 
   // 💾 CACHE STRATEGY: Fetch données secondaires UNIQUEMENT après actions utilisateur
   // Pas de polling automatique pour économiser RPC
