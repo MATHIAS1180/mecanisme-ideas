@@ -107,7 +107,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // ⏱️ Timer update continu
+  // ⏱️ Timer update continu + fallback polling quand timer = 0
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
@@ -142,6 +142,23 @@ export default function PlayPage() {
 
     return () => clearInterval(interval);
   }, [vault, connection, remainingSeconds]);
+
+  // 🔄 FALLBACK: Polling léger UNIQUEMENT quand timer = 0 (pour détecter résolution par keeper bot)
+  useEffect(() => {
+    if (remainingSeconds !== 0 || !realtimeVaultRef.current) return;
+
+    console.log("⏰ Timer at 0, starting fallback polling (10s interval)");
+    
+    const fallbackInterval = setInterval(() => {
+      console.log("🔄 Fallback poll: checking if keeper bot resolved cycle...");
+      realtimeVaultRef.current?.refresh(true);
+    }, 10000); // Toutes les 10 secondes UNIQUEMENT quand timer = 0
+
+    return () => {
+      console.log("✅ Stopping fallback polling");
+      clearInterval(fallbackInterval);
+    };
+  }, [remainingSeconds]);
 
   // 💾 CACHE STRATEGY: Fetch données secondaires UNIQUEMENT après actions utilisateur
   // Pas de polling automatique pour économiser RPC
