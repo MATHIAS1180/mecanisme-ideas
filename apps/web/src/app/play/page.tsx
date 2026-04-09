@@ -128,10 +128,13 @@ export default function PlayPage() {
         setLastTimerStart(nextVault ? nextVault.timerStartSlot : null);
         setLastCycleNumber(nextVault ? nextVault.cycleNumber : null);
 
-        // 2. Pot = solde du compte vault (PDA)
+        // 2. Pot = solde du compte vault (PDA) - rent reserve - carry-over
         const { vault: vaultPda } = getNodusAccounts(programId, programId);
         const vaultBalance = await connection.getBalance(vaultPda);
-        setPot(formatSolFromLamports(vaultBalance));
+        const rentReserve = 2_000_000; // ~0.002 SOL pour le rent du vault
+        const carryOver = nextVault ? Number(nextVault.carryOverLamports) : 0;
+        const actualPot = Math.max(0, vaultBalance - rentReserve - carryOver);
+        setPot(formatSolFromLamports(actualPot));
 
         // 3. Timer live
         const currentSlot = await connection.getSlot();
