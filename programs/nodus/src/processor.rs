@@ -91,11 +91,8 @@ impl Processor {
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
         
-        // Vérifier si on doit auto-résoudre le cycle
-        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, true)?;
-        if needs_auto_resolve {
-            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
-        }
+        // Vérifier que le cycle peut accepter l'action
+        Self::assert_cycle_can_accept_paid_action(&vault, slot, true)?;
 
         if vault.shield_expires_slot > slot {
             return Err(NodusError::ShieldActive.into());
@@ -145,11 +142,8 @@ impl Processor {
         let slot = current_slot()?;
         let mut vault = Self::load_vault(vault_account, program_id)?;
         
-        // Vérifier si on doit auto-résoudre le cycle
-        let needs_auto_resolve = Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
-        if needs_auto_resolve {
-            vault = Self::auto_resolve_cycle(vault_account, protocol_fee_wallet, leader_account, vault)?;
-        }
+        // Vérifier que le cycle peut accepter l'action
+        Self::assert_cycle_can_accept_paid_action(&vault, slot, false)?;
         
         if vault.leader != *signer.key {
             return Err(NodusError::LeaderOnlyAction.into());
@@ -564,7 +558,7 @@ impl Processor {
         Ok(())
     }
 
-    fn assert_cycle_can_accept_paid_action(vault: &VaultState, slot: u64, allow_empty_cycle: bool) -> Result<bool, ProgramError> {
+    fn assert_cycle_can_accept_paid_action(vault: &VaultState, slot: u64, allow_empty_cycle: bool) -> ProgramResult {
         if !vault.initialized {
             return Err(NodusError::VaultNotInitialized.into());
         }
@@ -574,10 +568,11 @@ impl Processor {
         if vault.leader == Pubkey::default() && !allow_empty_cycle {
             return Err(NodusError::CycleNotStarted.into());
         }
-        // Si le timer est expiré et qu'il y a un leader, on doit auto-résoudre
-        let needs_auto_resolve = vault.leader != Pubkey::default() 
-            && remaining_slots(slot, vault.timer_start_slot, vault.timer_reset_slots) == 0;
-        Ok(needs_auto_resolve)
+        // Si le timer est expiré, on doit d'abord résoudre le cycle
+        if vault.leader != Pubkey::default() && remaining_slots(slot, vault.timer_start_slot, vault.timer_reset_slots) == 0 {
+            return Err(NodusError::TimerNotExpired.into()); // Utilise cette erreur pour indiquer qu'il faut résoudre d'abord
+        }
+        Ok(())
     }
 
     fn load_vault(vault_account: &AccountInfo, program_id: &Pubkey) -> Result<VaultState, ProgramError> {
@@ -646,7 +641,7 @@ impl Processor {
         let new_carry = available_pot.saturating_mul(vault.curse_count as u64) / 100;
         let payout = available_pot.saturating_sub(protocol_fee).saturating_sub(new_carry);
 
-        msg!("nodus: resolve - pot: {}, fee: {}, carry: {}, payout: {}", available_pot, protocol_fee, new_carry, payout);
+        msg!("nodus: auto-resolve - pot: {}, fee: {}, carry: {}, payout: {}", available_pot, protocol_fee, new_carry, payout);
 
         // Transférer les lamports (seulement payout et fee, le carry reste dans le vault)
         Self::debit_vault_credit_target(vault_account, leader_account, payout)?;

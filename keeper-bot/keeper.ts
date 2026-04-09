@@ -241,18 +241,17 @@ class KeeperBot {
   }
 
   /**
-   * Resolve an expired cycle by sending a Deposit
-   * The Deposit will trigger auto-resolve in the smart contract!
+   * Resolve an expired cycle by sending a Resolve instruction
    */
   private async resolveCycle(vault: any) {
     try {
-      console.log(`⚡ Sending Deposit to trigger auto-resolve...`);
+      console.log(`⚡ Sending Resolve to settle expired cycle...`);
       
       // Parse leader from vault
       const currentLeader = new PublicKey(vault.leader);
       
-      // Build Deposit transaction (will trigger auto-resolve in smart contract)
-      const transaction = this.buildDepositInstruction(currentLeader);
+      // Build Resolve transaction
+      const transaction = this.buildResolveInstruction(currentLeader);
       transaction.feePayer = this.keeperWallet.publicKey;
       
       // Get recent blockhash
@@ -270,7 +269,7 @@ class KeeperBot {
         }
       );
       
-      console.log(`✅ Deposit sent! Signature: ${signature}`);
+      console.log(`✅ Resolve sent! Signature: ${signature}`);
       console.log(`🔗 https://explorer.solana.com/tx/${signature}?cluster=devnet`);
       
       // Wait for confirmation
@@ -280,7 +279,7 @@ class KeeperBot {
         lastValidBlockHeight,
       }, "confirmed");
       
-      console.log(`🎉 Cycle #${vault.cycleNumber} resolved! Keeper is now leader of new cycle.`);
+      console.log(`🎉 Cycle #${vault.cycleNumber} resolved! Winner: ${currentLeader.toBase58().slice(0, 8)}...`);
       
     } catch (error: any) {
       console.error("❌ Error resolving cycle:", error.message || error);
@@ -293,34 +292,30 @@ class KeeperBot {
   }
 
   /**
-   * Build Deposit instruction
-   * This will trigger auto-resolve if timer is expired!
+   * Build Resolve instruction
    */
-  private buildDepositInstruction(currentLeader: PublicKey) {
+  private buildResolveInstruction(currentLeader: PublicKey) {
     const PROTOCOL_FEE_WALLET = new PublicKey("FC2km6B1ub8fBf4FdLFs1hbJjmLx6EJbdAzN9Ajnb8nt");
     const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
     
-    // Derive user state PDA
+    // Derive user state PDA for keeper
     const USER_STATE_SEED = Buffer.from("user_state");
     const [userStatePda] = PublicKey.findProgramAddressSync(
       [USER_STATE_SEED, this.keeperWallet.publicKey.toBuffer()],
       this.programId
     );
     
-    // Use current leader from vault (needed for auto-resolve)
-    const leader = currentLeader;
-    
     const keys = [
       { pubkey: this.keeperWallet.publicKey, isSigner: true, isWritable: true },
       { pubkey: this.vaultPda, isSigner: false, isWritable: true },
       { pubkey: userStatePda, isSigner: false, isWritable: true },
       { pubkey: PROTOCOL_FEE_WALLET, isSigner: false, isWritable: true },
-      { pubkey: leader, isSigner: false, isWritable: true },
+      { pubkey: currentLeader, isSigner: false, isWritable: true },
       { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
     ];
     
-    // Deposit instruction discriminator (instruction #1)
-    const data = Buffer.from([1]);
+    // Resolve instruction discriminator (instruction #9)
+    const data = Buffer.from([9]);
     
     return new Transaction().add({
       keys,
