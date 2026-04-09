@@ -13,14 +13,13 @@ import { WinnerNotification } from "../../components/winner-notification";
 import { RealtimeVault } from "../../lib/realtime-vault";
 
 const ACTION_BUTTONS = [
-  ["Deposit", "Take leadership and reset the timer."],
-  ["Shield", "Leader-only protection that blocks deposits briefly."],
-  ["Sabotage", "Cut the remaining time without taking leadership."],
-  ["Anchor", "Leader-only two-entry reset to full breathing room."],
-  ["ArmSnipe", "Escrow one entry and trap the next challenger."],
-  ["Curse", "Reduce the winner share and feed carry-over."],
-  ["Blizzard", "Increase pot and pressure without taking the lead."],
-  ["Resolve", "Settle the cycle once the timer has expired."],
+  ["Deposit", "Take leadership and reset the timer.", "💰"],
+  ["Shield", "Leader-only protection that blocks deposits briefly.", "🛡️"],
+  ["Sabotage", "Cut the remaining time without taking leadership.", "💣"],
+  ["Anchor", "Leader-only two-entry reset to full breathing room.", "⚓"],
+  ["ArmSnipe", "Escrow one entry and trap the next challenger.", "🎯"],
+  ["Curse", "Reduce the winner share and feed carry-over.", "👻"],
+  ["Blizzard", "Increase pot and pressure without taking the lead.", "❄️"],
 ] as const;
 
 export default function PlayPage() {
@@ -42,13 +41,31 @@ export default function PlayPage() {
   const [lastCycleNumber, setLastCycleNumber] = useState<bigint | null>(null);
   const [showWinnerNotification, setShowWinnerNotification] = useState(false);
   const [winnerData, setWinnerData] = useState<{ winner: string; payout: string } | null>(null);
+  
+  // 🎯 DYNAMIC LAYOUT: Calculate available height
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
-  const lastZeroTimeRef = useRef<number | null>(null); // Track quand timer atteint 0
 
-  // ⚡ WEBSOCKET UNIQUEMENT - PAS DE POLLING!
-  // Le WebSocket gère TOUS les updates en temps réel
+  // 🎯 Calculate viewport height dynamically
+  useEffect(() => {
+    const updateHeight = () => {
+      const vh = window.innerHeight;
+      const headerHeight = 80; // Approximate header height
+      const titleHeight = 200; // Approximate title section height
+      const footerHeight = 60; // Approximate footer height
+      const availableHeight = vh - headerHeight - titleHeight - footerHeight;
+      setViewportHeight(availableHeight);
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+
+  // WebSocket setup
   useEffect(() => {
     if (!programId) return;
 
@@ -56,28 +73,11 @@ export default function PlayPage() {
     const realtimeVault = new RealtimeVault(connection, vaultPda);
     realtimeVaultRef.current = realtimeVault;
 
-    // Listener pour les changements de vault
     const handleVaultChange = (nextVault: NodusVault | null) => {
       if (!nextVault) return;
 
-      console.log("📡 WebSocket update reçu:", {
-        cycle: nextVault.cycleNumber.toString(),
-        leader: nextVault.leader,
-        timerStart: nextVault.timerStartSlot.toString(),
-        timerReset: nextVault.timerResetSlots.toString(),
-      });
-
-      // Détecte si c'est un nouveau cycle
       const isNewCycle = vault && nextVault.cycleNumber !== vault.cycleNumber;
       
-      if (isNewCycle) {
-        console.log("🎉 NOUVEAU CYCLE DÉTECTÉ!", {
-          ancien: vault.cycleNumber.toString(),
-          nouveau: nextVault.cycleNumber.toString(),
-        });
-      }
-      
-      // Si nouveau cycle ET qu'il y a un gagnant précédent, afficher la notification
       if (isNewCycle && nextVault.lastResolvedWinner && nextVault.lastResolvedWinner !== "11111111111111111111111111111111") {
         setWinnerData({
           winner: nextVault.lastResolvedWinner,
@@ -90,7 +90,6 @@ export default function PlayPage() {
       setLastTimerStart(nextVault.timerStartSlot);
       setLastCycleNumber(nextVault.cycleNumber);
 
-      // Si nouveau cycle, clear les messages
       if (isNewCycle) {
         setNotice(null);
         setError(null);
@@ -107,7 +106,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // ⏱️ Timer update continu + fallback polling quand timer = 0
+  // Timer update
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
@@ -123,7 +122,6 @@ export default function PlayPage() {
         
         setRemainingSeconds(secondsLeft);
         
-        // Status message quand timer expire
         if (secondsLeft === 0 && remainingSeconds > 0) {
           setCycleStatus("⏳ Cycle expiré - Le keeper bot va le résoudre automatiquement...");
         } else if (secondsLeft > 0) {
@@ -134,49 +132,35 @@ export default function PlayPage() {
       }
     };
 
-    // Update immédiat
     updateTimer();
-
-    // Update toutes les secondes
     const interval = setInterval(updateTimer, 1000);
-
     return () => clearInterval(interval);
   }, [vault, connection, remainingSeconds]);
 
-  // 🔄 FALLBACK: Polling léger UNIQUEMENT quand timer = 0 (pour détecter résolution par keeper bot)
+  // Fallback polling when timer = 0
   useEffect(() => {
     if (remainingSeconds !== 0 || !realtimeVaultRef.current) return;
 
-    console.log("⏰ Timer at 0, starting fallback polling (10s interval)");
-    
     const fallbackInterval = setInterval(() => {
-      console.log("🔄 Fallback poll: checking if keeper bot resolved cycle...");
       realtimeVaultRef.current?.refresh(true);
-    }, 10000); // Toutes les 10 secondes UNIQUEMENT quand timer = 0
+    }, 10000);
 
-    return () => {
-      console.log("✅ Stopping fallback polling");
-      clearInterval(fallbackInterval);
-    };
+    return () => clearInterval(fallbackInterval);
   }, [remainingSeconds]);
 
-  // 💾 CACHE STRATEGY: Fetch données secondaires UNIQUEMENT après actions utilisateur
-  // Pas de polling automatique pour économiser RPC
+  // Fetch secondary data
   const fetchSecondaryData = useCallback(async () => {
     if (!programId) return;
 
     try {
-      // Pot (calculé depuis vault state, pas de RPC call!)
       if (vault) {
         const rentReserve = 2_000_000;
         const carryOver = Number(vault.carryOverLamports);
-        // On utilise une estimation basée sur le vault state
         const estimatedBalance = rentReserve + carryOver + (Number(vault.pressureCount) * ENTRY_LAMPORTS);
         const actualPot = Math.max(0, estimatedBalance - rentReserve - carryOver);
         setPot(formatSolFromLamports(actualPot));
       }
 
-      // Session wallet balance (fetch UNIQUEMENT si nécessaire)
       if (sessionWallet && !sessionBalance) {
         const bal = await connection.getBalance(sessionWallet.publicKey);
         setSessionBalance(formatSolFromLamports(bal));
@@ -186,12 +170,9 @@ export default function PlayPage() {
     }
   }, [programId, connection, sessionWallet, vault, sessionBalance]);
 
-  // Fetch initial data ONCE
   useEffect(() => {
     fetchSecondaryData();
-  }, [vault?.cycleNumber, fetchSecondaryData]); // Re-fetch seulement au changement de cycle
-
-
+  }, [vault?.cycleNumber, fetchSecondaryData]);
 
   async function handleInitialize() {
     if (!connected || !publicKey || !sendTransaction || !programId) {
@@ -225,7 +206,6 @@ export default function PlayPage() {
       const wallet = sessionWallet ?? createSessionWallet();
       const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
       
-      // ⚡ OPTIMISATION: Build transaction avec blockhash "finalized"
       const { blockhash } = await connection.getLatestBlockhash("finalized");
       const transaction = await buildFundSessionTransaction({
         connection,
@@ -235,7 +215,6 @@ export default function PlayPage() {
       });
       transaction.recentBlockhash = blockhash;
       
-      // ⚡ OPTIMISATION: sendTransaction sans attendre confirmation
       const signature = await sendTransaction(transaction, connection, {
         skipPreflight: false,
         maxRetries: 2,
@@ -245,7 +224,6 @@ export default function PlayPage() {
       setLatestSignature(signature);
       setNotice("✅ Session wallet funded! Confirmation en cours...");
       
-      // Update balance après 1s
       setTimeout(async () => {
         const bal = await connection.getBalance(wallet.publicKey);
         setSessionBalance(formatSolFromLamports(bal));
@@ -253,59 +231,6 @@ export default function PlayPage() {
       
     } catch (fundError) {
       setError(fundError instanceof Error ? fundError.message : "Funding failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResolve() {
-    if (!programId || !publicKey || !sendTransaction) {
-      setError("Connect your main wallet to resolve the cycle.");
-      return;
-    }
-
-    if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
-      setError("No active cycle to resolve.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const leader = new PublicKey(vault.leader);
-      const feeWallet = new PublicKey(FEE_WALLET);
-      
-      const instruction = buildActionInstruction({
-        action: "Resolve",
-        programId,
-        signer: publicKey,
-        leader,
-        snipeExpirySlot: BigInt(0),
-      });
-      
-      const transaction = new Transaction().add(instruction);
-      transaction.feePayer = publicKey;
-      
-      const { blockhash } = await connection.getLatestBlockhash("finalized");
-      transaction.recentBlockhash = blockhash;
-      
-      const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: false,
-        maxRetries: 2,
-      });
-      
-      setLatestSignature(signature);
-      setNotice("✅ Cycle résolu! Nouveau cycle en cours...");
-      
-      // Force refresh après 1s
-      setTimeout(() => {
-        realtimeVaultRef.current?.refresh(true);
-      }, 1000);
-      
-    } catch (resolveError: any) {
-      const errorMessage = resolveError instanceof Error ? resolveError.message : String(resolveError);
-      setError(`❌ Erreur Resolve: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -350,7 +275,6 @@ export default function PlayPage() {
     setLoading(true);
     setError(null);
     
-    // 🚀 OPTIMISTIC UPDATE: Feedback instantané AVANT la confirmation on-chain
     if (realtimeVaultRef.current && vault) {
       const optimisticUpdates: Record<string, Partial<NodusVault>> = {
         Deposit: {
@@ -379,7 +303,7 @@ export default function PlayPage() {
 
     try {
       const actionLabel = String(action);
-      const expiry = BigInt((await connection.getSlot("finalized")) + 90); // Use finalized for slot
+      const expiry = BigInt((await connection.getSlot("finalized")) + 90);
       const leader = vault?.leader ? new PublicKey(vault.leader) : sessionWallet.publicKey;
       const instruction = buildActionInstruction({
         action,
@@ -392,27 +316,23 @@ export default function PlayPage() {
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = sessionWallet.publicKey;
       
-      // ⚡ OPTIMISATION: Utiliser getLatestBlockhash avec "finalized" pour éviter rate limits
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("finalized");
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
       
       transaction.sign(sessionWallet);
       
-      // ⚡ OPTIMISATION: sendRawTransaction avec skipPreflight pour vitesse maximale
       const signature = await connection.sendRawTransaction(
         transaction.serialize(),
         {
-          skipPreflight: false, // Keep preflight for safety
-          maxRetries: 2, // Reduce retries
+          skipPreflight: false,
+          maxRetries: 2,
         }
       );
       
       setLatestSignature(signature);
       setNotice(`✅ ${actionLabel} envoyé! Confirmation en cours...`);
       
-      // ⚡ OPTIMISATION: Pas d'attente de confirmation, le WebSocket va update
-      // Refresh session balance après action
       if (sessionWallet) {
         setTimeout(async () => {
           const bal = await connection.getBalance(sessionWallet.publicKey);
@@ -421,25 +341,15 @@ export default function PlayPage() {
       }
       
     } catch (actionError: any) {
-      // Détection spécifique des erreurs rate limit
       const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
       
       if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
-        setError(`⚠️ RPC Rate Limit Atteint
-
-Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
-
-💡 Pour éviter ce problème, utilise un RPC premium gratuit:
-• Tatum: https://solana-devnet.gateway.tatum.io (pas de compte!)
-• Helius: https://helius.dev
-• QuickNode: https://quicknode.com`);
+        setError(`⚠️ RPC Rate Limit Atteint - Réessaye dans quelques secondes.`);
       } else {
         setError(`❌ Erreur ${String(action)}: ${errorMessage}`);
       }
       
-      // Rollback optimistic update en cas d'erreur
       if (realtimeVaultRef.current) {
-        // Le WebSocket va refresh automatiquement
         console.log("❌ Action failed, WebSocket will restore correct state");
       }
     } finally {
@@ -447,26 +357,29 @@ Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
     }
   }
 
+  // Calculate dynamic heights based on viewport
+  const chartHeight = Math.max(300, Math.min(500, viewportHeight * 0.5));
+  const sidebarHeight = viewportHeight - 40;
+
   return (
     <>
       <section className="page-title shell">
         <p className="eyebrow">Play terminal</p>
         <h1>Operate the live cycle.</h1>
-        <p>
-          The terminal is wired for Phantom and Solflare on devnet. Configure the program ID, fund a bounded
-          session wallet, then send cycle actions without repeating a main wallet popup.
-        </p>
       </section>
 
-      <section className="section section--tight shell">
-        {!programId ? (
+      {!programId && (
+        <section className="section section--tight shell">
           <div className="notice notice--warning">
-            ⚠️ Aucun program ID configuré. Définis NEXT_PUBLIC_NODUS_PROGRAM_ID pour passer en mode devnet live.
+            ⚠️ Aucun program ID configuré.
           </div>
-        ) : null}
-        {programId && vault === null && !loading ? (
+        </section>
+      )}
+      
+      {programId && vault === null && !loading && (
+        <section className="section section--tight shell">
           <div className="notice notice--warning">
-            ⚠️ Le vault n&apos;est pas initialisé. Clique sur le bouton ci-dessous pour l&apos;initialiser (une seule fois).
+            ⚠️ Le vault n&apos;est pas initialisé.
             <button 
               className="button button--primary" 
               onClick={handleInitialize} 
@@ -476,22 +389,43 @@ Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
               🚀 Initialize Vault
             </button>
           </div>
-        ) : null}
-        {notice ? <div className="notice notice--success">{notice}</div> : null}
-        {error ? <div className="notice notice--danger">{error}</div> : null}
-        {latestSignature && (
+        </section>
+      )}
+
+      {notice && (
+        <section className="section section--tight shell">
+          <div className="notice notice--success">{notice}</div>
+        </section>
+      )}
+      
+      {error && (
+        <section className="section section--tight shell">
+          <div className="notice notice--danger">{error}</div>
+        </section>
+      )}
+      
+      {latestSignature && (
+        <section className="section section--tight shell">
           <div className="notice notice--info">
-            🔗 Transaction: <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer" style={{color: '#8cf5c5', textDecoration: 'underline'}}>
+            🔗 <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer">
               {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
             </a>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       <section className="section shell">
-        <div className="play-container">
-          {/* Graphique principal */}
-          <div className="play-main">
+        <div 
+          ref={containerRef}
+          className="play-container-dynamic" 
+          style={{ 
+            height: `${viewportHeight}px`,
+            maxHeight: `${viewportHeight}px`,
+            overflow: 'hidden'
+          }}
+        >
+          {/* Chart */}
+          <div className="play-chart-area" style={{ height: `${chartHeight}px` }}>
             {vault && vault.leader && vault.leader !== "11111111111111111111111111111111" ? (
               <CryptoChart
                 remainingSeconds={remainingSeconds}
@@ -506,139 +440,73 @@ Le RPC public devnet est surchargé. Réessaye dans quelques secondes.
                 <div className="cycle-graph__empty">
                   <div className="cycle-graph__empty-icon">🎮</div>
                   <h3>Aucun cycle actif</h3>
-                  <p>Sois le premier à démarrer un nouveau cycle!</p>
-                  <p className="muted">Clique sur &quot;Deposit&quot; pour prendre le leadership et démarrer le timer.</p>
+                  <p>Clique sur &quot;Deposit&quot; pour démarrer!</p>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="play-sidebar">
-            <article className="terminal">
-              <p className="eyebrow">Cycle telemetry</p>
-              
-              <div className="terminal__row">
-                <span className="terminal__label">Cycle #</span>
-                <strong className="terminal__value">{vault ? String(vault.cycleNumber) : "-"}</strong>
+          {/* Controls Grid */}
+          <div className="play-controls-grid" style={{ height: `${sidebarHeight - chartHeight}px` }}>
+            {/* Telemetry */}
+            <div className="control-card">
+              <h3>📊 Telemetry</h3>
+              <div className="compact-stats">
+                <div><span>Cycle</span><strong>{vault ? String(vault.cycleNumber) : "-"}</strong></div>
+                <div><span>Leader</span><strong>{shortenAddress(vault?.leader || "Live")}</strong></div>
+                <div><span>Timer</span><strong>{formatCountdown(remainingSeconds)}</strong></div>
+                <div><span>Pot</span><strong>{pot} SOL</strong></div>
+                <div><span>Pressure</span><strong>{vault ? String(vault.pressureCount) : "-"}/40</strong></div>
               </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Leader</span>
-                <strong className="terminal__value">{shortenAddress(vault?.leader || "Live")}</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Countdown</span>
-                <strong className="terminal__value">
-                  {formatCountdown(remainingSeconds)}
-                </strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Pot</span>
-                <strong className="terminal__value">{pot} SOL</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Pressure</span>
-                <strong className="terminal__value">{vault ? String(vault.pressureCount) : "-"} / 40</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Terminal lock</span>
-                <strong className="terminal__value">{vault?.terminalLock ? "🔒 ACTIVE" : "Inactive"}</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Carry-over</span>
-                <strong className="terminal__value">{vault ? `${formatSolFromLamports(vault.carryOverLamports)} SOL` : "0.0000 SOL"}</strong>
-              </div>
-              <div className="terminal__row">
-                <span className="terminal__label">Curses</span>
-                <strong className="terminal__value">{vault ? `${vault.curseCount} / 5` : "0 / 5"}</strong>
-              </div>
-              {cycleStatus && (
-                <div className="terminal__row">
-                  <span className="terminal__label">Statut</span>
-                  <strong className="terminal__value">{cycleStatus}</strong>
-                </div>
-              )}
-            </article>
+            </div>
 
-            <article className="metric-board">
-              <h3>Session wallet</h3>
-              <div className="session-row">
-                <span>Main wallet</span>
-                <strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong>
+            {/* Wallet */}
+            <div className="control-card">
+              <h3>💳 Wallet</h3>
+              <div className="compact-stats">
+                <div><span>Main</span><strong>{connected && publicKey ? shortenAddress(publicKey.toBase58()) : "Disconnected"}</strong></div>
+                <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
+                <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
               </div>
-              <div className="session-row">
-                <span>Session signer</span>
-                <strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong>
+              <div className="wallet-actions">
+                <input 
+                  type="text" 
+                  value={budget} 
+                  onChange={(e) => setBudget(e.target.value)} 
+                  placeholder="0.03"
+                  className="compact-input"
+                />
+                <button className="btn-compact btn-primary" onClick={handleFundSession} disabled={loading}>Fund</button>
+                <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
               </div>
-              <div className="session-row">
-                <span>Budget (prévu)</span>
-                <strong>{budget} SOL</strong>
-              </div>
-              <div className="session-row">
-                <span>Solde session</span>
-                <strong>{sessionBalance} SOL</strong>
-              </div>
-              <div className="session-row">
-                <span>Mise en cours</span>
-                <strong>{userStake} SOL</strong>
-              </div>
-              <p style={{ fontSize: '0.85em', color: '#888', marginTop: '8px', marginBottom: '12px' }}>
-                💡 Minimum recommandé: 0.03 SOL (couvre rent + plusieurs actions)
-              </p>
-              <div className="button-row">
-                <label className="input-shell">
-                  <span>Budget</span>
-                  <input value={budget} onChange={(event) => setBudget(event.target.value)} inputMode="decimal" />
-                </label>
-                <button className="button button--primary" onClick={handleFundSession} disabled={loading}>
-                  Fund
-                </button>
-                <button className="button button--secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>
-                  Sweep
-                </button>
-              </div>
-            </article>
+            </div>
 
-            <article className="metric-board">
-              <h3>Cycle actions</h3>
-              <p style={{ fontSize: '0.85em', color: '#888', marginBottom: '1rem' }}>
-                💡 Chaque action a un coût et un effet unique sur le cycle
-              </p>
-              <div className="action-grid">
-                {ACTION_BUTTONS.filter(([action]) => action !== "Resolve").map(([action, body]) => {
-                  const cost = action in ACTION_COSTS ? `${formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS])} SOL` : "network call";
-                  const disabled = loading || !sessionWallet || !programId;
-                  
-                  // Emoji pour chaque action
-                  const actionEmoji: Record<string, string> = {
-                    "Deposit": "💰",
-                    "Shield": "🛡️",
-                    "Sabotage": "💣",
-                    "Anchor": "⚓",
-                    "ArmSnipe": "🎯",
-                    "Curse": "👻",
-                    "Blizzard": "❄️",
-                  };
-                  
+            {/* Actions */}
+            <div className="control-card actions-card">
+              <h3>⚡ Actions</h3>
+              <div className="actions-compact-grid">
+                {ACTION_BUTTONS.map(([action, desc, emoji]) => {
+                  const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
                   return (
                     <button
                       key={action}
                       onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
-                      disabled={disabled}
-                      title={body}
+                      disabled={loading || !sessionWallet || !programId}
+                      className="action-btn-compact"
+                      title={desc}
                     >
-                      <strong>{actionEmoji[action] || "🎮"} {action}</strong>
-                      <small>{body}</small>
-                      <small style={{color: '#8cf5c5', fontWeight: 600}}>💵 {cost}</small>
+                      <span className="action-emoji">{emoji}</span>
+                      <span className="action-name">{action}</span>
+                      <span className="action-cost">{cost}</span>
                     </button>
                   );
                 })}
               </div>
-            </article>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Winner Notification */}
       {showWinnerNotification && winnerData && (
         <WinnerNotification
           winner={shortenAddress(winnerData.winner)}
