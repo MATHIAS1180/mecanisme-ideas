@@ -12,6 +12,9 @@ export class RealtimeVault {
   private updateQueue: NodusVault[] = [];
   private rafId: number | null = null;
   private lastUpdateTime = 0;
+  private retryCount = 0;
+  private maxRetries = 3;
+  private retryDelay = 1000; // Start with 1 second
 
   constructor(connection: Connection, vaultPda: PublicKey) {
     this.connection = connection;
@@ -190,6 +193,7 @@ export class RealtimeVault {
 
   /**
    * Manual refresh (fallback) - utilise aussi "processed" pour vitesse
+   * Avec retry logic et backoff exponentiel pour gérer rate limits
    */
   async refresh() {
     try {
@@ -202,11 +206,33 @@ export class RealtimeVault {
           leader: vault.leader,
         });
         this.queueUpdate(vault);
+        this.retryCount = 0; // Reset retry count on success
+        this.retryDelay = 1000; // Reset delay
       } else {
         console.error("❌ Vault account not found during refresh!");
       }
-    } catch (error) {
-      console.error("Error refreshing vault:", error);
+    } catch (error: any) {
+      // Détection rate limit 429
+      if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
+        console.warn(`⚠️ Rate limit hit (429), retry ${this.retryCount + 1}/${this.maxRetries}`);
+        
+        if (this.retryCount < this.maxRetries) {
+          this.retryCount++;
+          // Backoff exponentiel: 1s, 2s, 4s
+          const delay = this.retryDelay * Math.pow(2, this.retryCount - 1);
+          console.log(`⏳ Waiting ${delay}ms before retry...`);
+          
+          setTimeout(() => {
+            this.refresh();
+          }, delay);
+        } else {
+          console.error("❌ Max retries reached, giving up");
+          this.retryCount = 0;
+          this.retryDelay = 1000;
+        }
+      } else {
+        console.error("Error refreshing vault:", error);
+      }
     }
   }
 

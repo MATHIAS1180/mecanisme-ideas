@@ -106,7 +106,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // 🔄 POLLING AGRESSIF: Refresh toutes les 500ms pour garantir la sync
+  // 🔄 POLLING MODÉRÉ: Refresh toutes les 5 secondes (réduit pour éviter rate limit)
   useEffect(() => {
     if (!programId || !realtimeVaultRef.current) return;
 
@@ -115,7 +115,7 @@ export default function PlayPage() {
       pollCount++;
       console.log(`🔄 Polling #${pollCount}: refresh manuel`);
       realtimeVaultRef.current?.refresh();
-    }, 500); // Toutes les 500ms (2x par seconde)
+    }, 5000); // Toutes les 5 secondes pour éviter rate limit
 
     return () => clearInterval(pollInterval);
   }, [programId]);
@@ -158,7 +158,7 @@ export default function PlayPage() {
     return () => clearInterval(interval);
   }, [vault, connection, remainingSeconds]);
 
-  // Polling léger pour les données secondaires (pot, balances) - toutes les 5 secondes
+  // Polling léger pour les données secondaires (pot, balances) - toutes les 10 secondes
   useEffect(() => {
     if (!programId) return;
 
@@ -197,13 +197,19 @@ export default function PlayPage() {
             setUserStake("0.0000");
           }
         }
-      } catch (error) {
-        console.error("Error updating secondary data:", error);
+      } catch (error: any) {
+        // Détection rate limit
+        if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
+          console.warn("⚠️ Rate limit hit during secondary data update");
+          setError("⚠️ RPC rate limit atteint. Utilise un RPC premium (Helius, QuickNode) pour éviter ce problème.");
+        } else {
+          console.error("Error updating secondary data:", error);
+        }
       }
     }
 
     updateSecondaryData(); // Initial
-    interval = window.setInterval(updateSecondaryData, 5000); // Toutes les 5 secondes
+    interval = window.setInterval(updateSecondaryData, 10000); // Toutes les 10 secondes
 
     return () => {
       active = false;
@@ -356,8 +362,27 @@ export default function PlayPage() {
       const signature = await connection.sendRawTransaction(transaction.serialize());
       setLatestSignature(signature);
       setNotice(`✅ ${actionLabel} envoyé avec succès !`);
-    } catch (actionError) {
-      setError(`❌ Erreur ${String(action)} : ` + (actionError instanceof Error ? actionError.message : `${String(action)} a échoué.`));
+    } catch (actionError: any) {
+      // Détection spécifique des erreurs rate limit
+      const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
+      
+      if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
+        setError(`⚠️ RPC Rate Limit Atteint (429)
+
+Le RPC public devnet est trop limité pour une app temps réel.
+
+🚀 SOLUTION: Utilise un RPC premium GRATUIT:
+• Helius: https://helius.dev (recommandé)
+• QuickNode: https://quicknode.com
+• Alchemy: https://alchemy.com
+
+📝 Ajoute dans Vercel:
+NEXT_PUBLIC_SOLANA_RPC_URL=https://ton-rpc-premium-url
+
+💡 Tous offrent un tier gratuit pour devnet!`);
+      } else {
+        setError(`❌ Erreur ${String(action)} : ${errorMessage}`);
+      }
       
       // Rollback optimistic update en cas d'erreur
       if (realtimeVaultRef.current) {
