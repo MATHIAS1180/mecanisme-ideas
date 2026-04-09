@@ -44,10 +44,15 @@ export function CryptoChart({
   // Détecter nouveau cycle et reset
   useEffect(() => {
     if (remainingSeconds === maxSeconds) {
-      dataPointsRef.current = [];
+      // Nouveau cycle: reset avec point initial à 0
+      dataPointsRef.current = [{
+        time: 0,
+        value: 0,
+        timestamp: Date.now(),
+      }];
       cycleStartTimeRef.current = Date.now();
       smoothValueRef.current = parseFloat(pot) || 0;
-      lastPotRef.current = parseFloat(pot) || 0;
+      lastPotRef.current = 0; // Force l'ajout du premier point
     }
   }, [remainingSeconds, maxSeconds, pot]);
 
@@ -55,7 +60,8 @@ export function CryptoChart({
   useEffect(() => {
     const currentPot = parseFloat(pot) || 0;
     
-    if (currentPot !== lastPotRef.current) {
+    // Toujours ajouter un point si le pot a changé OU si c'est le premier point après 0
+    if (currentPot !== lastPotRef.current || (dataPointsRef.current.length === 1 && currentPot > 0)) {
       const elapsed = Date.now() - cycleStartTimeRef.current;
       const progress = maxSeconds > 0 ? Math.min(1, elapsed / (maxSeconds * 1000)) : 0;
       
@@ -64,6 +70,8 @@ export function CryptoChart({
         value: currentPot,
         timestamp: Date.now(),
       });
+
+      console.log("📊 DataPoint ajouté:", { time: progress, value: currentPot, total: dataPointsRef.current.length });
 
       // Garder les 200 derniers points pour une courbe ultra-smooth
       if (dataPointsRef.current.length > 200) {
