@@ -44,12 +44,22 @@ cargo build-sbf
 solana program deploy target/deploy/nodus.so --program-id programs/nodus/target/deploy/nodus-keypair-new.json --url devnet
 ```
 
+## Nouveau Program ID (Déployé)
+
+```
+By9yf8mRvJq3mXG2QE8nagNyZ5PCUJrfsikZUzk8otTo
+```
+
+**Déployé sur:** Devnet  
+**Date:** Aujourd'hui  
+**Statut:** ✅ Actif avec fix carry-over
+
 ## Mettre à jour l'UI
 
 Mettre à jour `.env.local` dans `apps/web/`:
 
 ```
-NEXT_PUBLIC_NODUS_PROGRAM_ID=NOUVEAU_PROGRAM_ID
+NEXT_PUBLIC_NODUS_PROGRAM_ID=By9yf8mRvJq3mXG2QE8nagNyZ5PCUJrfsikZUzk8otTo
 NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 ```
 
