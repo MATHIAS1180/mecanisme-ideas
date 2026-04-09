@@ -5,8 +5,8 @@
  * Tourne en continu, surveille le vault, et envoie des transactions Resolve.
  */
 
-import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
-import { decodeVault } from "@nodus/sdk";
+import "dotenv/config";
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import bs58 from "bs58";
 
 // Configuration
@@ -17,6 +17,114 @@ const CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 // Vault PDA
 const VAULT_SEED = Buffer.from("vault");
+
+// Decode vault from account data
+function decodeVault(data: Buffer) {
+  let offset = 0;
+  
+  // Read initialized (1 byte)
+  const initialized = data.readUInt8(offset) === 1;
+  offset += 1;
+  
+  // Read protocol_fee_bps (2 bytes)
+  const protocolFeeBps = data.readUInt16LE(offset);
+  offset += 2;
+  
+  // Read leader (32 bytes)
+  const leader = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+  offset += 32;
+  
+  // Read leader_since_slot (8 bytes)
+  const leaderSinceSlot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read timer_start_slot (8 bytes)
+  const timerStartSlot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read timer_reset_slots (8 bytes)
+  const timerResetSlots = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read pressure_count (8 bytes)
+  const pressureCount = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read terminal_lock (1 byte)
+  const terminalLock = data.readUInt8(offset) === 1;
+  offset += 1;
+  
+  // Read shield_expires_slot (8 bytes)
+  const shieldExpiresSlot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read anchor_count (4 bytes)
+  const anchorCount = data.readUInt32LE(offset);
+  offset += 4;
+  
+  // Read curse_count (4 bytes)
+  const curseCount = data.readUInt32LE(offset);
+  offset += 4;
+  
+  // Read active_snipe_wallet (32 bytes)
+  const activeSnipeWallet = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+  offset += 32;
+  
+  // Read active_snipe_expiry_slot (8 bytes)
+  const activeSnipeExpirySlot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read active_snipe_escrow_lamports (8 bytes)
+  const activeSnipeEscrowLamports = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read last_resolved_winner (32 bytes)
+  const lastResolvedWinner = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+  offset += 32;
+  
+  // Read last_resolved_payout (8 bytes)
+  const lastResolvedPayout = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read last_cycle_pot (8 bytes)
+  const lastCyclePot = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read last_cycle_pressure (8 bytes)
+  const lastCyclePressure = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read carry_over_lamports (8 bytes)
+  const carryOverLamports = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  // Read cycle_number (8 bytes)
+  const cycleNumber = data.readBigUInt64LE(offset);
+  offset += 8;
+  
+  return {
+    initialized,
+    protocolFeeBps,
+    leader,
+    leaderSinceSlot,
+    timerStartSlot,
+    timerResetSlots,
+    pressureCount,
+    terminalLock,
+    shieldExpiresSlot,
+    anchorCount,
+    curseCount,
+    activeSnipeWallet,
+    activeSnipeExpirySlot,
+    activeSnipeEscrowLamports,
+    lastResolvedWinner,
+    lastResolvedPayout,
+    lastCyclePot,
+    lastCyclePressure,
+    carryOverLamports,
+    cycleNumber,
+  };
+}
 
 class KeeperBot {
   private connection: Connection;
@@ -140,10 +248,11 @@ class KeeperBot {
     try {
       console.log(`⚡ Sending Deposit to trigger auto-resolve...`);
       
-      // Build Deposit instruction (will trigger auto-resolve in smart contract)
-      const instruction = this.buildDepositInstruction();
+      // Parse leader from vault
+      const currentLeader = new PublicKey(vault.leader);
       
-      const transaction = new Transaction().add(instruction);
+      // Build Deposit transaction (will trigger auto-resolve in smart contract)
+      const transaction = this.buildDepositInstruction(currentLeader);
       transaction.feePayer = this.keeperWallet.publicKey;
       
       // Get recent blockhash
@@ -187,8 +296,8 @@ class KeeperBot {
    * Build Deposit instruction
    * This will trigger auto-resolve if timer is expired!
    */
-  private buildDepositInstruction() {
-    const PROTOCOL_FEE_WALLET = new PublicKey("5s0B...kFHa"); // Replace with actual fee wallet
+  private buildDepositInstruction(currentLeader: PublicKey) {
+    const PROTOCOL_FEE_WALLET = new PublicKey("FC2km6B1ub8fBf4FdLFs1hbJjmLx6EJbdAzN9Ajnb8nt");
     const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
     
     // Derive user state PDA
@@ -198,8 +307,8 @@ class KeeperBot {
       this.programId
     );
     
-    // Get current leader (or default if no cycle)
-    const leader = this.keeperWallet.publicKey; // Will be updated by smart contract
+    // Use current leader from vault (needed for auto-resolve)
+    const leader = currentLeader;
     
     const keys = [
       { pubkey: this.keeperWallet.publicKey, isSigner: true, isWritable: true },
@@ -213,11 +322,11 @@ class KeeperBot {
     // Deposit instruction discriminator (instruction #1)
     const data = Buffer.from([1]);
     
-    return {
+    return new Transaction().add({
       keys,
       programId: this.programId,
       data,
-    };
+    });
   }
 
   /**

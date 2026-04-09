@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: nodus-keeper-bot
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run deploy
+    envVars:
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: NODUS_PROGRAM_ID
+        sync: false
+      - key: KEEPER_PRIVATE_KEY
+        sync: false

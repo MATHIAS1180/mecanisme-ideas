@@ -1,0 +1,8 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd keeper-bot && npm install && npm run build"
+
+[deploy]
+startCommand = "cd keeper-bot && npm run deploy"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

@@ -310,6 +310,8 @@ export default function PlayPage() {
       setLoading(false);
     }
   }
+
+  async function handleSweepSession() {
     if (!sessionWallet || !publicKey) {
       setError("No active session wallet found.");
       return;
