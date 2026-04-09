@@ -20,7 +20,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);
 
-  // Générer courbe: monte de 0 à pot, puis descend avec le timer
+  // Générer courbe: monte de 0 à pot, puis descend avec le timer - JUSQU'AU TEMPS ACTUEL
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
@@ -28,12 +28,15 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     }
 
     const elapsed = maxSeconds - remainingSeconds;
-    const progress = elapsed / maxSeconds;
+    const progress = Math.min(elapsed / maxSeconds, 1);
     
     const points: number[] = [];
     const numPoints = 60;
     
-    for (let i = 0; i <= numPoints; i++) {
+    // Générer points seulement jusqu'au temps actuel
+    const currentPointIndex = Math.floor(progress * numPoints);
+    
+    for (let i = 0; i <= currentPointIndex; i++) {
       const t = i / numPoints;
       
       if (t <= 0.15) {
@@ -41,14 +44,13 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         const riseProgress = t / 0.15;
         points.push(potValue * riseProgress);
       } else {
-        // Phase descente (85% du temps): suit le timer
+        // Phase descente (85% du temps): descend progressivement
         const fallProgress = (t - 0.15) / 0.85;
-        const currentProgress = Math.min(progress, 1);
+        const normalizedProgress = (progress - 0.15) / 0.85;
         
-        if (currentProgress < fallProgress) {
-          points.push(potValue);
-        } else {
-          const descendProgress = (currentProgress - fallProgress) / (1 - fallProgress);
+        if (fallProgress <= normalizedProgress) {
+          // Point dans le passé - calculer la valeur
+          const descendProgress = fallProgress;
           points.push(potValue * (1 - descendProgress * 0.4));
         }
       }
