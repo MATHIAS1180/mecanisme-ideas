@@ -44,6 +44,7 @@ export default function PlayPage() {
   const [winnerData, setWinnerData] = useState<{ winner: string; payout: string } | null>(null);
 
   const programId = getProgramId();
+  const realtimeVaultRef = useRef<RealtimeVault | null>(null);
 
   // ⚡ WEBSOCKET UNIQUEMENT - PAS DE POLLING!
   // Le WebSocket gère TOUS les updates en temps réel
@@ -172,7 +173,7 @@ export default function PlayPage() {
   // Fetch initial data ONCE
   useEffect(() => {
     fetchSecondaryData();
-  }, [vault?.cycleNumber]); // Re-fetch seulement au changement de cycle
+  }, [vault?.cycleNumber, fetchSecondaryData]); // Re-fetch seulement au changement de cycle
 
 
 
