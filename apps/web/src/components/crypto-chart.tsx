@@ -17,6 +17,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
   const lastPotValueRef = useRef<number>(0);
+  const animatingToRef = useRef<number | null>(null);
+  const animationStartRef = useRef<number>(0);
 
   const potValue = parseFloat(pot);
   const maxPotInHistory = useRef(potValue);
@@ -37,35 +39,85 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       setDataPoints([]);
       lastPotValueRef.current = 0;
       maxPotInHistory.current = 0;
+      animatingToRef.current = null;
       return;
     }
 
     // Ajouter un point UNIQUEMENT si le pot a changé significativement (>0.0001 SOL)
     const potDiff = Math.abs(potValue - lastPotValueRef.current);
     if (potDiff > 0.0001) {
-      setDataPoints(prev => {
-        // Si c'est le premier point du cycle, commencer à 0
-        if (prev.length === 0) {
-          return [0, potValue];
-        }
-        
-        // Ajouter des points intermédiaires pour une courbe lisse (pas de ligne droite)
-        const lastValue = prev[prev.length - 1];
-        const steps = 5; // 5 points intermédiaires pour transition smooth
-        const newPoints = [...prev];
-        
-        for (let i = 1; i <= steps; i++) {
-          const interpolated = lastValue + (potValue - lastValue) * (i / steps);
-          newPoints.push(interpolated);
-        }
-        
-        // Garder les 100 derniers points
-        return newPoints.slice(-100);
-      });
+      // Initialiser les points si c'est le premier
+      if (dataPoints.length === 0) {
+        setDataPoints([0, potValue]);
+        lastPotValueRef.current = potValue;
+        return;
+      }
       
+      // Démarrer l'animation vers la nouvelle valeur
+      animatingToRef.current = potValue;
+      animationStartRef.current = Date.now();
       lastPotValueRef.current = potValue;
     }
-  }, [potValue, isActive]);
+  }, [potValue, isActive, dataPoints.length]);
+
+  // Animation smooth de la courbe
+  useEffect(() => {
+    if (!isActive) return;
+
+    // Si on est en train d'animer vers une nouvelle valeur
+    if (animatingToRef.current !== null) {
+      const targetValue = animatingToRef.current;
+      const startValue = dataPoints[dataPoints.length - 1] || 0;
+      const animationDuration = 800; // 800ms pour une animation smooth
+
+      let animFrame: number;
+      
+      const animate = () => {
+        const elapsed = Date.now() - animationStartRef.current;
+        const progress = Math.min(elapsed / animationDuration, 1);
+        
+        // Easing function (ease-out cubic) pour une animation naturelle
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        const currentValue = startValue + (targetValue - startValue) * easeProgress;
+        
+        setDataPoints(prev => {
+          const newPoints = [...prev, currentValue];
+          // Garder les 100 derniers points
+          return newPoints.slice(-100);
+        });
+        
+        if (progress < 1) {
+          animFrame = requestAnimationFrame(animate);
+        } else {
+          // Animation terminée
+          animatingToRef.current = null;
+        }
+      };
+
+      animate();
+      
+      return () => {
+        if (animFrame) {
+          cancelAnimationFrame(animFrame);
+        }
+      };
+    } else {
+      // Pas d'animation en cours: garder la courbe PLATE
+      // Ajouter périodiquement le même point pour maintenir la courbe
+      const flatInterval = setInterval(() => {
+        if (dataPoints.length > 0) {
+          const lastValue = dataPoints[dataPoints.length - 1];
+          setDataPoints(prev => {
+            const newPoints = [...prev, lastValue];
+            return newPoints.slice(-100);
+          });
+        }
+      }, 500); // Ajouter un point toutes les 500ms pour garder la courbe visible
+
+      return () => clearInterval(flatInterval);
+    }
+  }, [animatingToRef.current, isActive, dataPoints.length]);
 
   // Animation 120 FPS
   useEffect(() => {
