@@ -14,14 +14,13 @@ interface CryptoChartProps {
 
 export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leader, isActive }: CryptoChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [dataPoints, setDataPoints] = useState<number[]>([0]);
+  const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
-  const lastPotValueRef = useRef<number>(0);
 
   const potValue = parseFloat(pot);
-  const maxPotInHistory = useRef(potValue);
+  const maxPotInHistory = useRef(0);
   
-  // Mettre à jour le max pot si le pot actuel est plus grand
+  // Mettre à jour le max pot
   useEffect(() => {
     if (potValue > maxPotInHistory.current) {
       maxPotInHistory.current = potValue;
@@ -30,42 +29,39 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   
   const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
-  // Synchroniser avec l'état on-chain réel
+  // Gérer les points de données
   useEffect(() => {
     if (!isActive) {
-      setDataPoints([0]);
-      lastPotValueRef.current = 0;
+      setDataPoints([]);
       maxPotInHistory.current = 0;
       return;
     }
 
-    // Ajouter un point UNIQUEMENT si le pot a changé
-    const potDiff = Math.abs(potValue - lastPotValueRef.current);
-    if (potDiff > 0.0001) {
-      setDataPoints(prev => {
-        const newPoints = [...prev, potValue];
-        // Garder les 60 derniers points
-        return newPoints.slice(-60);
-      });
-      lastPotValueRef.current = potValue;
+    // Initialiser avec 0 si vide
+    if (dataPoints.length === 0) {
+      setDataPoints([0]);
     }
-  }, [potValue, isActive]);
 
-  // Ajouter des points plats pour maintenir la courbe visible
-  useEffect(() => {
-    if (!isActive || dataPoints.length === 0) return;
+    // Ajouter le pot actuel
+    setDataPoints(prev => {
+      // Si le dernier point est différent, ajouter le nouveau
+      const lastPoint = prev[prev.length - 1];
+      if (Math.abs(lastPoint - potValue) > 0.0001) {
+        return [...prev, potValue].slice(-60);
+      }
+      return prev;
+    });
 
-    const flatInterval = setInterval(() => {
+    // Ajouter des points plats pour maintenir la courbe
+    const interval = setInterval(() => {
       setDataPoints(prev => {
-        if (prev.length === 0) return prev;
-        const lastValue = prev[prev.length - 1];
-        const newPoints = [...prev, lastValue];
-        return newPoints.slice(-60);
+        if (prev.length === 0) return [potValue];
+        return [...prev, potValue].slice(-60);
       });
-    }, 2000);
+    }, 1000);
 
-    return () => clearInterval(flatInterval);
-  }, [isActive, dataPoints.length]);
+    return () => clearInterval(interval);
+  }, [potValue, isActive]);
 
   // Animation 120 FPS
   useEffect(() => {

@@ -88,31 +88,40 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // Timer update - OPTIMISÉ pour réduire les appels RPC
+  // Timer update - OPTIMISÉ
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
       return;
     }
 
+    let isMounted = true;
+
     const updateTimer = async () => {
+      if (!isMounted) return;
+      
       try {
-        const currentSlot = await connection.getSlot("processed"); // ULTRA-RAPIDE
+        const currentSlot = await connection.getSlot("processed");
         const slotEnd = Number(vault.timerStartSlot) + Number(vault.timerResetSlots);
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
         
-        setRemainingSeconds(secondsLeft);
+        if (isMounted) {
+          setRemainingSeconds(secondsLeft);
+        }
       } catch (error) {
         console.error("Error updating timer:", error);
       }
     };
 
     updateTimer();
-    // Update toutes les 300ms pour être plus réactif
-    const interval = setInterval(updateTimer, 300);
-    return () => clearInterval(interval);
-  }, [vault, connection]);
+    const interval = setInterval(updateTimer, 1000); // Update toutes les 1s
+    
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [vault?.timerStartSlot, vault?.timerResetSlots, vault?.leader, connection]);
 
   // Fallback polling when timer = 0 - RÉDUIT pour économiser RPC
   useEffect(() => {
@@ -306,26 +315,20 @@ export default function PlayPage() {
       setLatestSignature(signature);
       showToast(`${actionLabel} executed successfully`, "success");
       
-      // POLLING AGRESSIF pendant 3 secondes après l'action pour update instantané
-      let pollCount = 0;
-      const maxPolls = 30; // 30 polls sur 3 secondes
-      const pollInterval = setInterval(async () => {
-        if (pollCount >= maxPolls) {
-          clearInterval(pollInterval);
-          return;
-        }
-        pollCount++;
-        
+      // Attendre la confirmation puis refresh UNE SEULE FOIS
+      connection.confirmTransaction(signature, "processed").then(() => {
         if (realtimeVaultRef.current) {
-          await realtimeVaultRef.current.refresh(true);
+          realtimeVaultRef.current.refresh(true);
         }
-      }, 100); // Poll toutes les 100ms pendant 3 secondes
+      }).catch(err => {
+        console.error("Confirmation error:", err);
+      });
       
       if (sessionWallet) {
         setTimeout(async () => {
           const bal = await connection.getBalance(sessionWallet.publicKey);
           setSessionBalance(formatSolFromLamports(bal));
-        }, 300);
+        }, 500);
       }
       
     } catch (actionError: any) {
