@@ -175,22 +175,10 @@ export default function PlayPage() {
       return;
     }
 
-    const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
-    const solAmount = (lamports / 1_000_000_000).toFixed(2);
-    
-    // Confirmation avant d'envoyer la transaction
-    const confirmed = window.confirm(
-      `Vous allez transférer ${solAmount} SOL de votre wallet principal vers votre session wallet.\n\n` +
-      `⚠️ Note: Phantom n'affiche que les frais réseau dans l'aperçu. ` +
-      `Cliquez sur "Avancé" pour voir le transfert de ${solAmount} SOL.\n\n` +
-      `Continuer?`
-    );
-    
-    if (!confirmed) return;
-
     setLoading(true);
     try {
       const wallet = sessionWallet ?? createSessionWallet();
+      const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
       
       const { blockhash } = await connection.getLatestBlockhash("finalized");
       const transaction = await buildFundSessionTransaction({
@@ -208,7 +196,7 @@ export default function PlayPage() {
       
       setSessionWallet(wallet);
       setLatestSignature(signature);
-      showToast(`${solAmount} SOL transférés vers le session wallet`, "success");
+      showToast("Session wallet funded successfully", "success");
       
       setTimeout(async () => {
         const bal = await connection.getBalance(wallet.publicKey);
@@ -451,20 +439,6 @@ export default function PlayPage() {
                   </a>
                 </div>
               )}
-              
-              <div style={{
-                fontSize: '0.75rem',
-                color: '#ffb100',
-                marginTop: '0.75rem',
-                marginBottom: '0.5rem',
-                padding: '0.5rem',
-                background: 'rgba(255, 177, 0, 0.1)',
-                border: '1px solid rgba(255, 177, 0, 0.2)',
-                borderRadius: '6px',
-                lineHeight: '1.4'
-              }}>
-                ⚠️ Phantom n&apos;affiche que les frais réseau. Cliquez sur &quot;Avancé&quot; dans la popup pour voir le transfert complet.
-              </div>
               
               <div className="wallet-actions">
                 <input 
