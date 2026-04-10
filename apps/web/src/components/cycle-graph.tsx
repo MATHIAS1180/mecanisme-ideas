@@ -15,7 +15,7 @@ interface Point {
   x: number;
   y: number;
   time: number;
-  pressure: number;
+  pot: number;
 }
 
 export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader, isActive }: CycleGraphProps) {
@@ -23,6 +23,7 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
   const [animatedPressure, setAnimatedPressure] = useState(0);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const lastPressureRef = useRef(pressure);
+  const lastPotRef = useRef(parseFloat(pot));
 
   // Animation de la pression
   useEffect(() => {
@@ -52,23 +53,28 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
     lastPressureRef.current = pressure;
   }, [pressure]);
 
-  // Génération des points de la courbe
+  // Génération des points de la courbe basée sur le pot
   useEffect(() => {
     const now = Date.now();
-    const progress = maxSeconds > 0 ? remainingSeconds / maxSeconds : 0;
-    const y = 100 - progress * 80; // 20-100 range
+    const currentPot = parseFloat(pot);
+    
+    // Trouve le pot maximum dans l'historique pour normaliser
+    const maxPot = Math.max(currentPot, ...points.map(p => p.pot), 0.1);
+    const y = 100 - (currentPot / maxPot) * 80; // 20-100 range (0 SOL en bas, max en haut)
     
     setPoints((prev) => {
-      const newPoints = [...prev, { x: 100, y, time: now, pressure }];
-      // Garde seulement les 60 derniers points (30 secondes à 2s d'intervalle)
-      const filtered = newPoints.filter((p) => now - p.time < 60000);
+      const newPoints = [...prev, { x: 100, y, time: now, pot: currentPot }];
+      // Garde seulement les 100 derniers points (au lieu de 60)
+      const filtered = newPoints.slice(-100);
       // Recalcule les positions x pour étaler sur toute la largeur
       return filtered.map((p, i) => ({
         ...p,
         x: (i / Math.max(filtered.length - 1, 1)) * 92, // 92 pour laisser place à la barre de pression
       }));
     });
-  }, [remainingSeconds, maxSeconds, pressure]);
+    
+    lastPotRef.current = currentPot;
+  }, [pot, points]);
 
   // Génère le path SVG avec courbe lissée
   const pathData = points.length > 1
@@ -82,17 +88,24 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
         .join(" ")}`
     : "";
 
-  // Couleur basée sur l'urgence
-  const getColor = () => {
+  // Couleur verte fixe
+  const color = "#00d2d3";
+  
+  // Couleur du timer basée sur l'urgence
+  const getTimerColor = () => {
     if (remainingSeconds === 0) return "#ff4757";
     if (remainingSeconds < 30) return "#ffa502";
     if (remainingSeconds < 60) return "#ffb100";
     return "#00d2d3";
   };
 
-  const color = getColor();
+  const timerColor = getTimerColor();
   const progressPercent = maxSeconds > 0 ? (remainingSeconds / maxSeconds) * 100 : 0;
   const pressurePercent = (animatedPressure / 40) * 100;
+  
+  // Calcule le pot max et min pour les labels
+  const maxPotValue = Math.max(parseFloat(pot), ...points.map(p => p.pot), 0.1);
+  const minPotValue = 0;
 
   return (
     <div className="cycle-graph">
@@ -103,7 +116,7 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
         </div>
         <div className="cycle-graph__stat">
           <span className="label">Timer</span>
-          <strong className="value" style={{ color }}>
+          <strong className="value" style={{ color: timerColor }}>
             {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, "0")}
           </strong>
         </div>
@@ -153,6 +166,17 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
           />
         ))}
 
+        {/* Labels de l'axe Y (SOL) */}
+        <text x="-2" y="102" fontSize="3" fill="rgba(255,255,255,0.4)" textAnchor="end">
+          {minPotValue.toFixed(2)}
+        </text>
+        <text x="-2" y="22" fontSize="3" fill="rgba(255,255,255,0.4)" textAnchor="end">
+          {maxPotValue.toFixed(2)}
+        </text>
+        <text x="-2" y="12" fontSize="2.5" fill="rgba(255,255,255,0.3)" textAnchor="end">
+          SOL
+        </text>
+
         {/* Zone sous la courbe */}
         {points.length > 1 && (
           <path
@@ -175,7 +199,7 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
         )}
 
         {/* Points de pression (marqueurs visuels) */}
-        {points.filter((_, i) => i % 5 === 0).map((p, i) => (
+        {points.filter((_, i) => i % 10 === 0).map((p, i) => (
           <circle
             key={i}
             cx={p.x}
@@ -284,7 +308,7 @@ export function CycleGraph({ remainingSeconds, maxSeconds, pressure, pot, leader
               className="progress-bar__fill"
               style={{
                 width: `${progressPercent}%`,
-                backgroundColor: color,
+                backgroundColor: timerColor,
               }}
             />
           </div>
