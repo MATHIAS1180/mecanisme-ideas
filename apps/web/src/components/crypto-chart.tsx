@@ -17,18 +17,21 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
   const cycleStartTimeRef = useRef<number>(Date.now());
-  const lastMaxSecondsRef = useRef<number>(maxSeconds);
+  const lastRemainingSecondsRef = useRef<number>(remainingSeconds);
 
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);
 
-  // Reset cycle start time when cycle changes (maxSeconds changes or remainingSeconds increases)
+  // Detect timer reset (new deposit or action that resets countdown)
   useEffect(() => {
-    if (maxSeconds !== lastMaxSecondsRef.current || remainingSeconds > lastMaxSecondsRef.current) {
-      cycleStartTimeRef.current = Date.now() - ((maxSeconds - remainingSeconds) * 1000);
-      lastMaxSecondsRef.current = maxSeconds;
+    // If remaining seconds increased significantly (more than 2 seconds), it's a reset
+    if (remainingSeconds > lastRemainingSecondsRef.current + 2) {
+      // Reset cycle start time to now
+      cycleStartTimeRef.current = Date.now();
+      console.log("🔄 Timer reset detected! Restarting animation from top");
     }
-  }, [remainingSeconds, maxSeconds]);
+    lastRemainingSecondsRef.current = remainingSeconds;
+  }, [remainingSeconds]);
 
   // Générer courbe: ANIMATION CONTINUE FLUIDE
   useEffect(() => {
