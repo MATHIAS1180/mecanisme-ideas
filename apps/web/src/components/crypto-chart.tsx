@@ -16,9 +16,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
-  const cycleStartTimeRef = useRef<number>(Date.now());
-  const lastRemainingSecondsRef = useRef<number>(remainingSeconds);
-  const previousPointsRef = useRef<number[]>([]);
+  const lastPotValueRef = useRef<number>(0);
+  const currentCycleRef = useRef<number | null>(null);
 
   const potValue = parseFloat(pot);
   const maxPotInHistory = useRef(potValue);
@@ -32,36 +31,21 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   
   const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
-  // Detect timer reset (new deposit or action that resets countdown)
-  useEffect(() => {
-    // If remaining seconds increased significantly (more than 2 seconds), it's a reset
-    if (remainingSeconds > lastRemainingSecondsRef.current + 2) {
-      // Save current points to continue from
-      previousPointsRef.current = [...dataPoints];
-      // Reset cycle start time to now
-      cycleStartTimeRef.current = Date.now();
-      console.log("🔄 Timer reset detected! Continuing curve from current position");
-    }
-    lastRemainingSecondsRef.current = remainingSeconds;
-  }, [remainingSeconds, dataPoints]);
-
-  // Générer courbe: MONTE AVEC LE POT, RESTE PLATE, START À 0
+  // Synchroniser avec l'état on-chain réel: ajouter un point SEULEMENT quand le pot change
   useEffect(() => {
     if (!isActive) {
+      // Pas de cycle actif, réinitialiser
       setDataPoints([]);
-      previousPointsRef.current = [];
-      maxPotInHistory.current = potValue;
+      lastPotValueRef.current = 0;
+      maxPotInHistory.current = 0;
+      currentCycleRef.current = null;
       return;
     }
 
-    let animFrame: number;
-    
-    const updateCurve = () => {
-      // La courbe représente le pot au fil du temps
-      // Elle monte quand le pot augmente, reste plate sinon
-      
+    // Ajouter un point UNIQUEMENT si le pot a changé (dépôt ou action)
+    if (potValue !== lastPotValueRef.current) {
       setDataPoints(prev => {
-        // Si c'est le premier point, commencer à 0
+        // Si c'est le premier point du cycle, commencer à 0
         if (prev.length === 0) {
           return [0, potValue];
         }
@@ -71,19 +55,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         return newPoints.slice(-100);
       });
       
-      // Mettre à jour toutes les 500ms (2 fois par seconde)
-      setTimeout(() => {
-        animFrame = requestAnimationFrame(updateCurve);
-      }, 500);
-    };
-
-    updateCurve();
-    
-    return () => {
-      if (animFrame) {
-        cancelAnimationFrame(animFrame);
-      }
-    };
+      lastPotValueRef.current = potValue;
+    }
   }, [potValue, isActive]);
 
   // Animation 120 FPS
