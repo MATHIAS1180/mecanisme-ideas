@@ -29,7 +29,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   
   const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
-  // Gérer les points de données
+  // Gérer les points de données - TOUJOURS garder le 0 au début
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
@@ -37,26 +37,28 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       return;
     }
 
-    // Initialiser avec 0 si vide
-    if (dataPoints.length === 0) {
-      setDataPoints([0]);
-    }
-
-    // Ajouter le pot actuel
     setDataPoints(prev => {
-      // Si le dernier point est différent, ajouter le nouveau
-      const lastPoint = prev[prev.length - 1];
+      // Toujours commencer par 0
+      const basePoints = prev.length === 0 ? [0] : prev;
+      
+      // Si le pot a changé, ajouter le nouveau point
+      const lastPoint = basePoints[basePoints.length - 1];
       if (Math.abs(lastPoint - potValue) > 0.0001) {
-        return [...prev, potValue].slice(-60);
+        // Garder minimum 20 points pour toujours voir le 0 à gauche
+        const newPoints = [...basePoints, potValue];
+        return newPoints.length > 60 ? newPoints.slice(-60) : newPoints;
       }
-      return prev;
+      
+      return basePoints;
     });
 
     // Ajouter des points plats pour maintenir la courbe
     const interval = setInterval(() => {
       setDataPoints(prev => {
-        if (prev.length === 0) return [potValue];
-        return [...prev, potValue].slice(-60);
+        if (prev.length === 0) return [0, potValue];
+        // Garder minimum 20 points
+        const newPoints = [...prev, potValue];
+        return newPoints.length > 60 ? newPoints.slice(-60) : newPoints;
       });
     }, 1000);
 
@@ -122,72 +124,45 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       if (dataPoints.length > 1) {
         const points = dataPoints.map((value, i) => ({
           x: padding.left + (chartWidth / (dataPoints.length - 1)) * i,
-          y: padding.top + chartHeight - (value / maxPot) * chartHeight,
+          y: padding.top + chartHeight - (Math.min(value, maxPot) / maxPot) * chartHeight, // Clamp à maxPot
         }));
 
-        // Calculer la couleur - TOUJOURS VERTE
         const lineColor = "#8cf5c5"; // Vert fixe
         const fillColorTop = "rgba(140, 245, 197, 0.3)";
         const fillColorBottom = "rgba(140, 245, 197, 0.0)";
 
-        // Gradient fill avec couleur dynamique
+        // Gradient fill
         const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
         gradient.addColorStop(0, fillColorTop);
         gradient.addColorStop(1, fillColorBottom);
 
+        // Fill area
         ctx.beginPath();
         ctx.moveTo(points[0].x, height - padding.bottom);
-        ctx.lineTo(points[0].x, points[0].y);
-
-        // Catmull-Rom spline
-        for (let i = 0; i < points.length - 1; i++) {
-          const p0 = points[Math.max(0, i - 1)];
-          const p1 = points[i];
-          const p2 = points[i + 1];
-          const p3 = points[Math.min(points.length - 1, i + 2)];
-
-          for (let t = 0; t <= 1; t += 0.1) {
-            const t2 = t * t;
-            const t3 = t2 * t;
-
-            const x = 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
-            const y = 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
-
-            ctx.lineTo(x, y);
-          }
+        
+        // Lignes droites simples (pas de spline pour éviter dépassement)
+        for (let i = 0; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
         }
-
+        
         ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
         ctx.closePath();
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Ligne
+        // Ligne de contour
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
-
-        for (let i = 0; i < points.length - 1; i++) {
-          const p0 = points[Math.max(0, i - 1)];
-          const p1 = points[i];
-          const p2 = points[i + 1];
-          const p3 = points[Math.min(points.length - 1, i + 2)];
-
-          for (let t = 0; t <= 1; t += 0.1) {
-            const t2 = t * t;
-            const t3 = t2 * t;
-
-            const x = 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
-            const y = 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
-
-            ctx.lineTo(x, y);
-          }
+        
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
         }
 
         ctx.strokeStyle = lineColor;
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Point actuel avec couleur dynamique
+        // Point actuel
         const lastPoint = points[points.length - 1];
         ctx.beginPath();
         ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
