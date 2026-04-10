@@ -109,8 +109,8 @@ export default function PlayPage() {
     };
 
     updateTimer();
-    // Update toutes les 500ms au lieu de 100ms pour économiser RPC
-    const interval = setInterval(updateTimer, 500);
+    // Update toutes les 300ms pour être plus réactif
+    const interval = setInterval(updateTimer, 300);
     return () => clearInterval(interval);
   }, [vault, connection]);
 
@@ -306,11 +306,18 @@ export default function PlayPage() {
       setLatestSignature(signature);
       showToast(`${actionLabel} executed successfully`, "success");
       
+      // FORCE refresh immédiat pour update ultra-rapide
+      if (realtimeVaultRef.current) {
+        setTimeout(() => {
+          realtimeVaultRef.current?.refresh(true);
+        }, 100); // Refresh après 100ms
+      }
+      
       if (sessionWallet) {
         setTimeout(async () => {
           const bal = await connection.getBalance(sessionWallet.publicKey);
           setSessionBalance(formatSolFromLamports(bal));
-        }, 1000);
+        }, 500); // Réduit de 1000ms à 500ms
       }
       
     } catch (actionError: any) {

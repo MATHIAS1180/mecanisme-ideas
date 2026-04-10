@@ -48,9 +48,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     if (potDiff > 0.0001) {
       // Initialiser les points si c'est le premier
       if (dataPoints.length === 0) {
-        setDataPoints([0, potValue]);
-        lastPotValueRef.current = potValue;
-        return;
+        setDataPoints([0]);
+        lastPotValueRef.current = 0;
       }
       
       // Démarrer l'animation vers la nouvelle valeur
@@ -67,46 +66,40 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     // Si on est en train d'animer vers une nouvelle valeur
     if (animatingToRef.current !== null) {
       const targetValue = animatingToRef.current;
-      const startValue = dataPoints[dataPoints.length - 1] || 0;
-      const animationDuration = 600; // 600ms pour une animation rapide et smooth
+      const startValue = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1] : 0;
+      const animationDuration = 400; // 400ms pour animation rapide
 
       let animFrame: number;
-      let lastFrameTime = Date.now();
       
       const animate = () => {
         const now = Date.now();
         const elapsed = now - animationStartRef.current;
         const progress = Math.min(elapsed / animationDuration, 1);
         
-        // Throttle à 60 FPS max (16ms entre frames)
-        if (now - lastFrameTime < 16) {
-          animFrame = requestAnimationFrame(animate);
-          return;
-        }
-        lastFrameTime = now;
-        
-        // Easing function (ease-out cubic) pour une animation naturelle
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        // Easing function (ease-out quad) pour animation rapide et naturelle
+        const easeProgress = 1 - Math.pow(1 - progress, 2);
         
         // IMPORTANT: Ne JAMAIS dépasser la valeur cible
-        const currentValue = Math.min(
-          startValue + (targetValue - startValue) * easeProgress,
-          targetValue
-        );
+        const currentValue = startValue + (targetValue - startValue) * easeProgress;
+        
+        // Limiter strictement à la valeur cible
+        const clampedValue = Math.min(currentValue, targetValue);
         
         setDataPoints(prev => {
-          const newPoints = [...prev, currentValue];
-          // Garder les 100 derniers points
-          return newPoints.slice(-100);
+          // Remplacer les derniers points au lieu d'ajouter
+          const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
+          newPoints.push(clampedValue);
+          return newPoints;
         });
         
         if (progress < 1) {
           animFrame = requestAnimationFrame(animate);
         } else {
-          // Animation terminée - ajouter le point final EXACT
+          // Animation terminée - forcer la valeur exacte
           setDataPoints(prev => {
-            const newPoints = [...prev, targetValue];
-            return newPoints.slice(-100);
+            const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
+            newPoints.push(targetValue);
+            return newPoints;
           });
           animatingToRef.current = null;
         }
@@ -120,17 +113,17 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         }
       };
     } else {
-      // Pas d'animation en cours: garder la courbe PLATE
-      // Ajouter périodiquement le même point pour maintenir la courbe
+      // Pas d'animation en cours: garder la courbe PLATE au niveau exact
       const flatInterval = setInterval(() => {
         if (dataPoints.length > 0) {
           const lastValue = dataPoints[dataPoints.length - 1];
           setDataPoints(prev => {
-            const newPoints = [...prev, lastValue];
-            return newPoints.slice(-100);
+            const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
+            newPoints.push(lastValue);
+            return newPoints;
           });
         }
-      }, 1000); // Ajouter un point toutes les 1s (réduit de 500ms pour économiser CPU)
+      }, 2000); // Toutes les 2s pour économiser
 
       return () => clearInterval(flatInterval);
     }
