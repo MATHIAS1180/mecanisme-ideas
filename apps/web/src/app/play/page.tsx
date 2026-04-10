@@ -42,9 +42,6 @@ export default function PlayPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<"success" | "error" | "info" | "warning">("info");
   
-  // Session wallet notification (stays in wallet block)
-  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
-  
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
 
@@ -199,7 +196,6 @@ export default function PlayPage() {
       
       setSessionWallet(wallet);
       setLatestSignature(signature);
-      setSessionNotice("✅ Session wallet funded!");
       showToast("Session wallet funded successfully", "success");
       
       setTimeout(async () => {
@@ -235,7 +231,6 @@ export default function PlayPage() {
       clearSessionWallet();
       setSessionWallet(null);
       setLatestSignature(signature);
-      setSessionNotice(null);
       showToast("Session balance returned to main wallet", "success");
     } catch (sweepError) {
       showToast(sweepError instanceof Error ? sweepError.message : "Sweep failed", "error");
@@ -391,39 +386,56 @@ export default function PlayPage() {
                 <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
               </div>
               
-              {/* Session wallet notification stays here */}
-              {sessionNotice && (
-                <div className="wallet-notice" style={{
-                  marginTop: '0.75rem',
-                  padding: '0.5rem 0.75rem',
-                  background: 'rgba(140, 245, 197, 0.15)',
-                  border: '1px solid rgba(140, 245, 197, 0.3)',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem',
-                  color: '#8cf5c5'
-                }}>
-                  {sessionNotice}
-                </div>
-              )}
-              
-              {/* Transaction signature link stays here */}
+              {/* Transaction signature link - integrated nicely */}
               {latestSignature && (
-                <div className="wallet-notice" style={{
+                <div style={{
                   marginTop: '0.75rem',
-                  padding: '0.5rem 0.75rem',
-                  background: 'rgba(125, 211, 255, 0.15)',
+                  padding: '0.75rem',
+                  background: 'linear-gradient(135deg, rgba(125, 211, 255, 0.1) 0%, rgba(140, 245, 197, 0.1) 100%)',
                   border: '1px solid rgba(125, 211, 255, 0.3)',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   fontSize: '0.85rem',
-                  color: '#7dd3ff'
                 }}>
-                  🔗 <a 
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    marginBottom: '0.4rem',
+                    color: '#7dd3ff',
+                    fontWeight: '600',
+                    fontSize: '0.8rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    <span>🔗</span>
+                    <span>Latest Transaction</span>
+                  </div>
+                  <a 
                     href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    style={{ color: '#7dd3ff', textDecoration: 'underline' }}
+                    style={{ 
+                      color: '#8cf5c5',
+                      textDecoration: 'none',
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                      display: 'block',
+                      padding: '0.4rem 0.6rem',
+                      background: 'rgba(140, 245, 197, 0.1)',
+                      borderRadius: '6px',
+                      transition: 'all 0.2s ease',
+                      wordBreak: 'break-all'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(140, 245, 197, 0.2)';
+                      e.currentTarget.style.transform = 'translateX(2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(140, 245, 197, 0.1)';
+                      e.currentTarget.style.transform = 'translateX(0)';
+                    }}
                   >
-                    View on Explorer
+                    {latestSignature.slice(0, 12)}...{latestSignature.slice(-12)}
                   </a>
                 </div>
               )}
