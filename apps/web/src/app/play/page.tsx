@@ -483,13 +483,23 @@ export default function PlayPage() {
               <div className="actions-vertical">
                 {ACTION_BUTTONS.map(([action, desc, emoji]) => {
                   const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
+                  
+                  // Bloquer les actions spéciales si l'utilisateur n'a pas encore fait de deposit dans ce cycle
+                  // On vérifie si le vault a un leader ET si ce n'est pas l'utilisateur
+                  const cycleHasLeader = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
+                  const userIsLeader = sessionWallet && vault && vault.leader === sessionWallet.publicKey.toBase58();
+                  const userHasDeposited = cycleHasLeader && userIsLeader;
+                  
+                  // Seul Deposit est toujours autorisé, les autres actions nécessitent d'avoir fait un deposit
+                  const isBlocked = action !== "Deposit" && !userHasDeposited && cycleHasLeader;
+                  
                   return (
                     <button
                       key={action}
                       onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
-                      disabled={loading || !sessionWallet || !programId}
+                      disabled={loading || !sessionWallet || !programId || isBlocked}
                       className="action-btn-vertical"
-                      title={desc}
+                      title={isBlocked ? "Vous devez d'abord faire un Deposit dans ce cycle" : desc}
                     >
                       <span className="action-emoji">{emoji}</span>
                       <div className="action-info">

@@ -21,7 +21,16 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const previousPointsRef = useRef<number[]>([]);
 
   const potValue = parseFloat(pot);
-  const maxPot = Math.max(potValue, 0.01);
+  const maxPotInHistory = useRef(potValue);
+  
+  // Mettre à jour le max pot si le pot actuel est plus grand
+  useEffect(() => {
+    if (potValue > maxPotInHistory.current) {
+      maxPotInHistory.current = potValue;
+    }
+  }, [potValue]);
+  
+  const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
   // Detect timer reset (new deposit or action that resets countdown)
   useEffect(() => {
@@ -36,99 +45,31 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     lastRemainingSecondsRef.current = remainingSeconds;
   }, [remainingSeconds, dataPoints]);
 
-  // Générer courbe: ANIMATION CONTINUE FLUIDE
+  // Générer courbe: MONTE AVEC LE POT, RESTE PLATE
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
       previousPointsRef.current = [];
+      maxPotInHistory.current = potValue;
       return;
     }
 
     let animFrame: number;
     
     const updateCurve = () => {
-      // Calculer le temps écoulé depuis le début du cycle avec précision milliseconde
-      const now = Date.now();
-      const elapsedMs = now - cycleStartTimeRef.current;
-      const elapsedSeconds = elapsedMs / 1000;
+      // La courbe représente le pot au fil du temps
+      // Elle monte quand le pot augmente, reste plate sinon
       
-      let points: number[] = [];
+      setDataPoints(prev => {
+        const newPoints = [...prev, potValue];
+        // Garder les 100 derniers points
+        return newPoints.slice(-100);
+      });
       
-      // Si on a des points précédents (timer reset), on les garde et on continue
-      if (previousPointsRef.current.length > 0) {
-        // Garder TOUS les points précédents (l'historique complet)
-        points = [...previousPointsRef.current];
-        
-        // Calculer la valeur de départ (dernier point de la courbe précédente)
-        const startValue = previousPointsRef.current[previousPointsRef.current.length - 1];
-        
-        // Phase de remontée rapide depuis la position actuelle jusqu'au sommet
-        const riseTime = 0.5; // 0.5 secondes pour remonter
-        const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
-        
-        if (elapsedSeconds <= riseTime) {
-          // En phase de remontée depuis startValue jusqu'à potValue
-          const currentPoints = Math.floor(riseProgress * 50);
-          for (let i = 1; i <= currentPoints; i++) {
-            const t = i / 50;
-            const value = startValue + (potValue - startValue) * t;
-            points.push(value);
-          }
-        } else {
-          // Remontée complète, maintenant on descend
-          // Ajouter tous les points de remontée
-          for (let i = 1; i <= 50; i++) {
-            const t = i / 50;
-            const value = startValue + (potValue - startValue) * t;
-            points.push(value);
-          }
-          
-          // Phase de descente depuis le sommet
-          const descendStart = riseTime;
-          const descendDuration = maxSeconds - riseTime;
-          const descendElapsed = elapsedSeconds - descendStart;
-          const descendProgress = Math.min(descendElapsed / descendDuration, 1);
-          
-          const descendPoints = Math.floor(descendProgress * 450);
-          for (let i = 1; i <= descendPoints; i++) {
-            const t = i / 450;
-            const value = potValue * (1 - t);
-            points.push(value);
-          }
-        }
-      } else {
-        // Comportement normal (premier cycle ou pas de reset)
-        const riseTime = Math.min(0.5, maxSeconds * 0.05);
-        const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
-        
-        if (elapsedSeconds <= riseTime) {
-          const currentPoints = Math.floor(riseProgress * 50);
-          for (let i = 0; i <= currentPoints; i++) {
-            const t = i / 50;
-            points.push(potValue * t);
-          }
-        } else {
-          const descendStart = riseTime;
-          const descendDuration = maxSeconds - riseTime;
-          const descendElapsed = elapsedSeconds - descendStart;
-          const descendProgress = Math.min(descendElapsed / descendDuration, 1);
-          
-          for (let i = 0; i <= 50; i++) {
-            const t = i / 50;
-            points.push(potValue * t);
-          }
-          
-          const descendPoints = Math.floor(descendProgress * 450);
-          for (let i = 0; i <= descendPoints; i++) {
-            const t = i / 450;
-            const value = potValue * (1 - t);
-            points.push(value);
-          }
-        }
-      }
-      
-      setDataPoints(points);
-      animFrame = requestAnimationFrame(updateCurve);
+      // Mettre à jour toutes les 500ms (2 fois par seconde)
+      setTimeout(() => {
+        animFrame = requestAnimationFrame(updateCurve);
+      }, 500);
     };
 
     updateCurve();
@@ -138,7 +79,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         cancelAnimationFrame(animFrame);
       }
     };
-  }, [maxSeconds, potValue, isActive]);
+  }, [potValue, isActive]);
 
   // Animation 120 FPS
   useEffect(() => {
@@ -184,15 +125,15 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         ctx.stroke();
       }
 
-      // Labels Y-axis - EN SECONDES
+      // Labels Y-axis - EN SOL (POT)
       ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
       ctx.font = "11px monospace";
       ctx.textAlign = "left";
       
       for (let i = 0; i <= 5; i++) {
-        const seconds = maxSeconds * (1 - i / 5);
+        const solValue = maxPot * (1 - i / 5);
         const y = padding.top + (chartHeight / 5) * i;
-        ctx.fillText(Math.floor(seconds) + "s", width - padding.right + 5, y + 4);
+        ctx.fillText(solValue.toFixed(3) + " SOL", width - padding.right + 5, y + 4);
       }
 
       // Courbe
@@ -202,31 +143,10 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
           y: padding.top + chartHeight - (value / maxPot) * chartHeight,
         }));
 
-        // Calculer la couleur basée sur le temps restant (vert -> jaune -> orange -> rouge)
-        const timeProgress = remainingSeconds / maxSeconds;
-        let lineColor: string;
-        let fillColorTop: string;
-        let fillColorBottom: string;
-        
-        if (timeProgress > 0.5) {
-          // Vert à jaune (50% - 100%)
-          const t = (timeProgress - 0.5) * 2; // 0 à 1
-          lineColor = `rgb(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))})`;
-          fillColorTop = `rgba(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))}, 0.3)`;
-          fillColorBottom = `rgba(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))}, 0.0)`;
-        } else if (timeProgress > 0.2) {
-          // Jaune à orange (20% - 50%)
-          const t = (timeProgress - 0.2) / 0.3; // 0 à 1
-          lineColor = `rgb(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0)`;
-          fillColorTop = `rgba(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0, 0.3)`;
-          fillColorBottom = `rgba(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0, 0.0)`;
-        } else {
-          // Orange à rouge (0% - 20%)
-          const t = timeProgress / 0.2; // 0 à 1
-          lineColor = `rgb(255, ${Math.floor(140 * t)}, 0)`;
-          fillColorTop = `rgba(255, ${Math.floor(140 * t)}, 0, 0.3)`;
-          fillColorBottom = `rgba(255, ${Math.floor(140 * t)}, 0, 0.0)`;
-        }
+        // Calculer la couleur - TOUJOURS VERTE
+        const lineColor = "#8cf5c5"; // Vert fixe
+        const fillColorTop = "rgba(140, 245, 197, 0.3)";
+        const fillColorBottom = "rgba(140, 245, 197, 0.0)";
 
         // Gradient fill avec couleur dynamique
         const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
@@ -295,16 +215,6 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         ctx.lineWidth = 2;
         ctx.stroke();
       }
-
-      // Timer
-      const minutes = Math.floor(remainingSeconds / 60);
-      const seconds = remainingSeconds % 60;
-      const timeStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
-      
-      ctx.font = "bold 48px monospace";
-      ctx.textAlign = "center";
-      ctx.fillStyle = remainingSeconds <= 10 ? "#ff6b6b" : "#ffffff";
-      ctx.fillText(timeStr, width / 2, height / 2);
 
       animationRef.current = requestAnimationFrame(animate);
     };
