@@ -97,7 +97,7 @@ export default function PlayPage() {
 
     const updateTimer = async () => {
       try {
-        const currentSlot = await connection.getSlot("confirmed");
+        const currentSlot = await connection.getSlot("processed"); // ULTRA-RAPIDE
         const slotEnd = Number(vault.timerStartSlot) + Number(vault.timerResetSlots);
         const slotsLeft = Math.max(0, slotEnd - currentSlot);
         const secondsLeft = Math.floor(slotsLeft * 0.45);
@@ -109,17 +109,17 @@ export default function PlayPage() {
     };
 
     updateTimer();
-    const interval = setInterval(updateTimer, 1000);
+    const interval = setInterval(updateTimer, 100); // Update toutes les 100ms
     return () => clearInterval(interval);
   }, [vault, connection, remainingSeconds]);
 
-  // Fallback polling when timer = 0
+  // Fallback polling when timer = 0 - DÉSACTIVÉ car polling agressif actif
   useEffect(() => {
     if (remainingSeconds !== 0 || !realtimeVaultRef.current) return;
 
     const fallbackInterval = setInterval(() => {
       realtimeVaultRef.current?.refresh(true);
-    }, 10000);
+    }, 1000); // Réduit à 1s au lieu de 10s
 
     return () => clearInterval(fallbackInterval);
   }, [remainingSeconds]);

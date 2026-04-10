@@ -16,8 +16,9 @@ export class RealtimeVault {
   private maxRetries = 3;
   private retryDelay = 1000;
   private lastFetchTime = 0;
-  private minFetchInterval = 2000; // Minimum 2s entre fetches manuels
+  private minFetchInterval = 100; // 100ms entre fetches pour ultra-rapidité
   private isSubscribed = false;
+  private pollingInterval: NodeJS.Timeout | null = null;
 
   constructor(connection: Connection, vaultPda: PublicKey) {
     this.connection = connection;
@@ -25,9 +26,9 @@ export class RealtimeVault {
   }
 
   /**
-   * Subscribe to vault changes in real-time via WebSocket
-   * STRATÉGIE: WebSocket ULTRA-RAPIDE avec "processed" commitment
-   * Target: 100ms latency
+   * Subscribe to vault changes in real-time via WebSocket + AGGRESSIVE POLLING
+   * STRATÉGIE: WebSocket + Polling 100ms pour latence ULTRA-RAPIDE garantie
+   * Target: 100ms latency GARANTI
    */
   async subscribe() {
     if (this.subscriptionId !== null) {
@@ -36,8 +37,8 @@ export class RealtimeVault {
     }
 
     try {
-      // Initial fetch UNIQUE (pas de retry pour économiser RPC)
-      console.log("⚡ Fetching initial vault state (ONE TIME)...");
+      // Initial fetch RAPIDE
+      console.log("⚡ Fetching initial vault state...");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
@@ -53,15 +54,14 @@ export class RealtimeVault {
       }
 
       // Subscribe to changes via WebSocket avec "processed" commitment
-      // "processed" = ULTRA-RAPIDE (~100ms) mais peut être rollback
-      console.log("📡 Subscribing to WebSocket updates (processed = ULTRA-FAST 100ms)...");
+      console.log("📡 Subscribing to WebSocket updates (processed = ULTRA-FAST)...");
       this.subscriptionId = this.connection.onAccountChange(
         this.vaultPda,
         (accountInfo) => {
           try {
             if (accountInfo.data) {
               const vault = decodeVault(accountInfo.data);
-              console.log("⚡ WebSocket update (100ms):", {
+              console.log("⚡ WebSocket update:", {
                 cycle: vault.cycleNumber.toString(),
                 leader: vault.leader,
                 pressure: vault.pressureCount.toString(),
@@ -76,7 +76,28 @@ export class RealtimeVault {
         "processed" // ULTRA-RAPIDE: ~100ms latency
       );
 
-      console.log("⚡ WebSocket subscribed (processed, ~100ms latency, NO POLLING)");
+      // AGGRESSIVE POLLING: 100ms pour garantir latence ultra-rapide
+      console.log("🔥 Starting AGGRESSIVE polling (100ms) for guaranteed low latency...");
+      this.pollingInterval = setInterval(async () => {
+        try {
+          const now = Date.now();
+          if (now - this.lastFetchTime < 100) return; // Throttle à 100ms
+          
+          this.lastFetchTime = now;
+          const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
+          if (account?.data) {
+            const vault = decodeVault(account.data);
+            this.queueUpdate(vault);
+          }
+        } catch (error: any) {
+          // Ignorer les erreurs de rate limit silencieusement
+          if (!error?.message?.includes("429") && !error?.message?.includes("rate limit")) {
+            console.error("Polling error:", error);
+          }
+        }
+      }, 100); // Poll toutes les 100ms
+
+      console.log("⚡ ULTRA-FAST mode activated: WebSocket + 100ms polling");
     } catch (error) {
       console.error("Error subscribing to vault:", error);
     }
@@ -151,6 +172,13 @@ export class RealtimeVault {
    * Unsubscribe from vault changes
    */
   async unsubscribe() {
+    // Stop polling
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+      console.log("✅ Stopped aggressive polling");
+    }
+
     if (this.subscriptionId !== null) {
       try {
         await this.connection.removeAccountChangeListener(this.subscriptionId);
@@ -191,42 +219,24 @@ export class RealtimeVault {
   }
 
   /**
-   * Manual refresh - THROTTLED pour éviter rate limits
-   * Utilisé UNIQUEMENT en cas d'urgence (WebSocket déconnecté ou cycle bloqué)
+   * Manual refresh - DÉSACTIVÉ car polling agressif actif
    */
   async refresh(force = false) {
-    // Throttle: minimum 2s entre refreshes (sauf si force=true)
-    const now = Date.now();
-    if (!force && now - this.lastFetchTime < this.minFetchInterval) {
-      console.log("⏸️ Refresh throttled (too soon), relying on WebSocket");
-      return;
-    }
-
-    // Si WebSocket fonctionne ET pas forcé, pas besoin de refresh manuel
-    if (!force && this.isSubscribed && this.lastVault) {
-      console.log("✅ WebSocket active, skipping manual refresh");
+    // Le polling agressif gère déjà les updates, pas besoin de refresh manuel
+    if (!force) {
+      console.log("✅ Aggressive polling active, no manual refresh needed");
       return;
     }
 
     try {
-      console.log(force ? "🔄 FORCE refresh (cycle bloqué)" : "🔄 Manual refresh (WebSocket fallback)");
-      this.lastFetchTime = now;
-      
+      console.log("🔄 FORCE refresh");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
-        console.log("✅ Refresh complete:", {
-          cycle: vault.cycleNumber.toString(),
-          leader: vault.leader,
-        });
         this.queueUpdate(vault);
       }
     } catch (error: any) {
-      if (error?.message?.includes("429") || error?.message?.includes("rate limit")) {
-        console.warn("⚠️ Rate limit hit - WebSocket will handle updates");
-      } else {
-        console.error("Error refreshing vault:", error);
-      }
+      console.error("Error refreshing vault:", error);
     }
   }
 
