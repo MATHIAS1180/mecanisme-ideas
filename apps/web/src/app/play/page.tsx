@@ -42,6 +42,9 @@ export default function PlayPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<"success" | "error" | "info" | "warning">("info");
   
+  // Session wallet notification (stays in wallet block)
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
 
@@ -196,6 +199,7 @@ export default function PlayPage() {
       
       setSessionWallet(wallet);
       setLatestSignature(signature);
+      setSessionNotice("✅ Session wallet funded!");
       showToast("Session wallet funded! Confirmation en cours...", "success");
       
       setTimeout(async () => {
@@ -231,6 +235,7 @@ export default function PlayPage() {
       clearSessionWallet();
       setSessionWallet(null);
       setLatestSignature(signature);
+      setSessionNotice(null);
       showToast("Remaining session balance sent back to the connected wallet.", "success");
     } catch (sweepError) {
       showToast(sweepError instanceof Error ? sweepError.message : "Sweep failed.", "error");
@@ -350,15 +355,6 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Transaction signature link stays in wallet block */}
-        {latestSignature && (
-          <div className="notice notice--info" style={{ marginBottom: '1rem' }}>
-            🔗 <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer">
-              View on Solana Explorer: {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
-            </a>
-          </div>
-        )}
-
         {/* Stats bar en haut */}
         <div className="stats-bar">
           <div className="stat-item">
@@ -394,6 +390,44 @@ export default function PlayPage() {
                 <div><span>Session</span><strong>{sessionWallet ? shortenAddress(sessionWallet.publicKey.toBase58()) : "Not funded"}</strong></div>
                 <div><span>Balance</span><strong>{sessionBalance} SOL</strong></div>
               </div>
+              
+              {/* Session wallet notification stays here */}
+              {sessionNotice && (
+                <div className="wallet-notice" style={{
+                  marginTop: '0.75rem',
+                  padding: '0.5rem 0.75rem',
+                  background: 'rgba(140, 245, 197, 0.15)',
+                  border: '1px solid rgba(140, 245, 197, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  color: '#8cf5c5'
+                }}>
+                  {sessionNotice}
+                </div>
+              )}
+              
+              {/* Transaction signature link stays here */}
+              {latestSignature && (
+                <div className="wallet-notice" style={{
+                  marginTop: '0.75rem',
+                  padding: '0.5rem 0.75rem',
+                  background: 'rgba(125, 211, 255, 0.15)',
+                  border: '1px solid rgba(125, 211, 255, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  color: '#7dd3ff'
+                }}>
+                  🔗 <a 
+                    href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ color: '#7dd3ff', textDecoration: 'underline' }}
+                  >
+                    View on Explorer
+                  </a>
+                </div>
+              )}
+              
               <div className="wallet-actions">
                 <input 
                   type="text" 
