@@ -52,7 +52,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     });
   }, [potValue, isActive]); // Pas de dépendance sur dataPoints.length pour réactivité max
 
-  // Ajouter des points plats MOINS souvent pour économiser
+  // Ajouter des points plats toutes les 10ms pour animation fluide 120 FPS
   useEffect(() => {
     if (!isActive) return;
 
@@ -62,17 +62,17 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         const newPoints = [...prev, potValue];
         return newPoints.length > 60 ? newPoints.slice(-60) : newPoints;
       });
-    }, 2000); // Toutes les 2s
+    }, 10); // 10ms = 100 FPS (proche de 120 FPS)
 
     return () => clearInterval(interval);
   }, [potValue, isActive]);
 
-  // Animation 120 FPS
+  // Animation 120 FPS avec optimisation performance
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false }); // Désactiver alpha pour performance
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -88,7 +88,18 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
-    const animate = () => {
+    let lastFrameTime = 0;
+    const targetFPS = 120;
+    const frameInterval = 1000 / targetFPS; // ~8.33ms pour 120 FPS
+
+    const animate = (currentTime: number) => {
+      // Throttle à 120 FPS max
+      if (currentTime - lastFrameTime < frameInterval) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastFrameTime = currentTime;
+
       ctx.clearRect(0, 0, width, height);
 
       // Grille TradingView
@@ -188,7 +199,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       if (animationRef.current) {
