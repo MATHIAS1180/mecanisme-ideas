@@ -321,8 +321,6 @@ export default function PlayPage() {
       
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = sessionWallet.publicKey;
-      
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("processed");
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
       
