@@ -306,18 +306,26 @@ export default function PlayPage() {
       setLatestSignature(signature);
       showToast(`${actionLabel} executed successfully`, "success");
       
-      // FORCE refresh immédiat pour update ultra-rapide
-      if (realtimeVaultRef.current) {
-        setTimeout(() => {
-          realtimeVaultRef.current?.refresh(true);
-        }, 100); // Refresh après 100ms
-      }
+      // POLLING AGRESSIF pendant 3 secondes après l'action pour update instantané
+      let pollCount = 0;
+      const maxPolls = 30; // 30 polls sur 3 secondes
+      const pollInterval = setInterval(async () => {
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          return;
+        }
+        pollCount++;
+        
+        if (realtimeVaultRef.current) {
+          await realtimeVaultRef.current.refresh(true);
+        }
+      }, 100); // Poll toutes les 100ms pendant 3 secondes
       
       if (sessionWallet) {
         setTimeout(async () => {
           const bal = await connection.getBalance(sessionWallet.publicKey);
           setSessionBalance(formatSolFromLamports(bal));
-        }, 500); // Réduit de 1000ms à 500ms
+        }, 300);
       }
       
     } catch (actionError: any) {

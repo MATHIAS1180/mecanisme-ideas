@@ -14,11 +14,9 @@ interface CryptoChartProps {
 
 export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leader, isActive }: CryptoChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [dataPoints, setDataPoints] = useState<number[]>([]);
+  const [dataPoints, setDataPoints] = useState<number[]>([0]);
   const animationRef = useRef<number | null>(null);
   const lastPotValueRef = useRef<number>(0);
-  const animatingToRef = useRef<number | null>(null);
-  const animationStartRef = useRef<number>(0);
 
   const potValue = parseFloat(pot);
   const maxPotInHistory = useRef(potValue);
@@ -32,102 +30,42 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   
   const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
-  // Synchroniser avec l'état on-chain réel: ajouter un point SEULEMENT quand le pot change
+  // Synchroniser avec l'état on-chain réel
   useEffect(() => {
     if (!isActive) {
-      // Pas de cycle actif, réinitialiser
-      setDataPoints([]);
+      setDataPoints([0]);
       lastPotValueRef.current = 0;
       maxPotInHistory.current = 0;
-      animatingToRef.current = null;
       return;
     }
 
-    // Ajouter un point UNIQUEMENT si le pot a changé significativement (>0.0001 SOL)
+    // Ajouter un point UNIQUEMENT si le pot a changé
     const potDiff = Math.abs(potValue - lastPotValueRef.current);
     if (potDiff > 0.0001) {
-      // Initialiser les points si c'est le premier
-      if (dataPoints.length === 0) {
-        setDataPoints([0]);
-        lastPotValueRef.current = 0;
-      }
-      
-      // Démarrer l'animation vers la nouvelle valeur
-      animatingToRef.current = potValue;
-      animationStartRef.current = Date.now();
+      setDataPoints(prev => {
+        const newPoints = [...prev, potValue];
+        // Garder les 60 derniers points
+        return newPoints.slice(-60);
+      });
       lastPotValueRef.current = potValue;
     }
-  }, [potValue, isActive, dataPoints.length]);
+  }, [potValue, isActive]);
 
-  // Animation smooth de la courbe
+  // Ajouter des points plats pour maintenir la courbe visible
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || dataPoints.length === 0) return;
 
-    // Si on est en train d'animer vers une nouvelle valeur
-    if (animatingToRef.current !== null) {
-      const targetValue = animatingToRef.current;
-      const startValue = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1] : 0;
-      const animationDuration = 400; // 400ms pour animation rapide
+    const flatInterval = setInterval(() => {
+      setDataPoints(prev => {
+        if (prev.length === 0) return prev;
+        const lastValue = prev[prev.length - 1];
+        const newPoints = [...prev, lastValue];
+        return newPoints.slice(-60);
+      });
+    }, 2000);
 
-      let animFrame: number;
-      
-      const animate = () => {
-        const now = Date.now();
-        const elapsed = now - animationStartRef.current;
-        const progress = Math.min(elapsed / animationDuration, 1);
-        
-        // Easing function (ease-out quad) pour animation rapide et naturelle
-        const easeProgress = 1 - Math.pow(1 - progress, 2);
-        
-        // IMPORTANT: Ne JAMAIS dépasser la valeur cible
-        const currentValue = startValue + (targetValue - startValue) * easeProgress;
-        
-        // Limiter strictement à la valeur cible
-        const clampedValue = Math.min(currentValue, targetValue);
-        
-        setDataPoints(prev => {
-          // Remplacer les derniers points au lieu d'ajouter
-          const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
-          newPoints.push(clampedValue);
-          return newPoints;
-        });
-        
-        if (progress < 1) {
-          animFrame = requestAnimationFrame(animate);
-        } else {
-          // Animation terminée - forcer la valeur exacte
-          setDataPoints(prev => {
-            const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
-            newPoints.push(targetValue);
-            return newPoints;
-          });
-          animatingToRef.current = null;
-        }
-      };
-
-      animate();
-      
-      return () => {
-        if (animFrame) {
-          cancelAnimationFrame(animFrame);
-        }
-      };
-    } else {
-      // Pas d'animation en cours: garder la courbe PLATE au niveau exact
-      const flatInterval = setInterval(() => {
-        if (dataPoints.length > 0) {
-          const lastValue = dataPoints[dataPoints.length - 1];
-          setDataPoints(prev => {
-            const newPoints = prev.length > 50 ? prev.slice(-50) : [...prev];
-            newPoints.push(lastValue);
-            return newPoints;
-          });
-        }
-      }, 2000); // Toutes les 2s pour économiser
-
-      return () => clearInterval(flatInterval);
-    }
-  }, [animatingToRef.current, isActive, dataPoints.length]);
+    return () => clearInterval(flatInterval);
+  }, [isActive, dataPoints.length]);
 
   // Animation 120 FPS
   useEffect(() => {
