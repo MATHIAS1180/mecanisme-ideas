@@ -88,7 +88,7 @@ export default function PlayPage() {
     };
   }, [programId, connection, vault]);
 
-  // Timer update
+  // Timer update - OPTIMISÉ pour réduire les appels RPC
   useEffect(() => {
     if (!vault || !vault.leader || vault.leader === "11111111111111111111111111111111") {
       setRemainingSeconds(0);
@@ -109,17 +109,18 @@ export default function PlayPage() {
     };
 
     updateTimer();
-    const interval = setInterval(updateTimer, 100); // Update toutes les 100ms
+    // Update toutes les 500ms au lieu de 100ms pour économiser RPC
+    const interval = setInterval(updateTimer, 500);
     return () => clearInterval(interval);
-  }, [vault, connection, remainingSeconds]);
+  }, [vault, connection]);
 
-  // Fallback polling when timer = 0 - DÉSACTIVÉ car polling agressif actif
+  // Fallback polling when timer = 0 - RÉDUIT pour économiser RPC
   useEffect(() => {
     if (remainingSeconds !== 0 || !realtimeVaultRef.current) return;
 
     const fallbackInterval = setInterval(() => {
       realtimeVaultRef.current?.refresh(true);
-    }, 1000); // Réduit à 1s au lieu de 10s
+    }, 5000); // Réduit à 5s pour économiser RPC
 
     return () => clearInterval(fallbackInterval);
   }, [remainingSeconds]);

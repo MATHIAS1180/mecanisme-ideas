@@ -68,13 +68,22 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     if (animatingToRef.current !== null) {
       const targetValue = animatingToRef.current;
       const startValue = dataPoints[dataPoints.length - 1] || 0;
-      const animationDuration = 800; // 800ms pour une animation smooth
+      const animationDuration = 600; // 600ms pour une animation rapide et smooth
 
       let animFrame: number;
+      let lastFrameTime = Date.now();
       
       const animate = () => {
-        const elapsed = Date.now() - animationStartRef.current;
+        const now = Date.now();
+        const elapsed = now - animationStartRef.current;
         const progress = Math.min(elapsed / animationDuration, 1);
+        
+        // Throttle à 60 FPS max (16ms entre frames)
+        if (now - lastFrameTime < 16) {
+          animFrame = requestAnimationFrame(animate);
+          return;
+        }
+        lastFrameTime = now;
         
         // Easing function (ease-out cubic) pour une animation naturelle
         const easeProgress = 1 - Math.pow(1 - progress, 3);
@@ -113,7 +122,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
             return newPoints.slice(-100);
           });
         }
-      }, 500); // Ajouter un point toutes les 500ms pour garder la courbe visible
+      }, 1000); // Ajouter un point toutes les 1s (réduit de 500ms pour économiser CPU)
 
       return () => clearInterval(flatInterval);
     }

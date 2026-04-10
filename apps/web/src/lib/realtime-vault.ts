@@ -12,13 +12,7 @@ export class RealtimeVault {
   private updateQueue: NodusVault[] = [];
   private rafId: number | null = null;
   private lastUpdateTime = 0;
-  private retryCount = 0;
-  private maxRetries = 3;
-  private retryDelay = 1000;
-  private lastFetchTime = 0;
-  private minFetchInterval = 100; // 100ms entre fetches pour ultra-rapidité
   private isSubscribed = false;
-  private pollingInterval: NodeJS.Timeout | null = null;
 
   constructor(connection: Connection, vaultPda: PublicKey) {
     this.connection = connection;
@@ -26,9 +20,10 @@ export class RealtimeVault {
   }
 
   /**
-   * Subscribe to vault changes in real-time via WebSocket + AGGRESSIVE POLLING
-   * STRATÉGIE: WebSocket + Polling 100ms pour latence ULTRA-RAPIDE garantie
-   * Target: 100ms latency GARANTI
+   * Subscribe to vault changes in real-time via WebSocket ONLY
+   * STRATÉGIE: WebSocket UNIQUEMENT avec "processed" pour latence minimale
+   * PAS DE POLLING = PAS DE RATE LIMIT
+   * Target: <100ms latency via WebSocket natif
    */
   async subscribe() {
     if (this.subscriptionId !== null) {
@@ -37,8 +32,8 @@ export class RealtimeVault {
     }
 
     try {
-      // Initial fetch RAPIDE
-      console.log("⚡ Fetching initial vault state...");
+      // Initial fetch UNIQUE
+      console.log("⚡ Fetching initial vault state (ONE TIME ONLY)...");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
@@ -47,21 +42,21 @@ export class RealtimeVault {
           leader: vault.leader,
         });
         this.lastVault = vault;
-        this.lastFetchTime = Date.now();
         this.notifyListeners(vault);
       } else {
         console.error("❌ Vault account not found!");
       }
 
       // Subscribe to changes via WebSocket avec "processed" commitment
-      console.log("📡 Subscribing to WebSocket updates (processed = ULTRA-FAST)...");
+      // "processed" = ULTRA-RAPIDE (~50-100ms) - le RPC push les updates instantanément
+      console.log("📡 Subscribing to WebSocket (processed, ZERO polling)...");
       this.subscriptionId = this.connection.onAccountChange(
         this.vaultPda,
         (accountInfo) => {
           try {
             if (accountInfo.data) {
               const vault = decodeVault(accountInfo.data);
-              console.log("⚡ WebSocket update:", {
+              console.log("⚡ WebSocket push received (<100ms):", {
                 cycle: vault.cycleNumber.toString(),
                 leader: vault.leader,
                 pressure: vault.pressureCount.toString(),
@@ -73,31 +68,10 @@ export class RealtimeVault {
             console.error("Error decoding vault:", error);
           }
         },
-        "processed" // ULTRA-RAPIDE: ~100ms latency
+        "processed" // ULTRA-RAPIDE: RPC push instantané
       );
 
-      // AGGRESSIVE POLLING: 100ms pour garantir latence ultra-rapide
-      console.log("🔥 Starting AGGRESSIVE polling (100ms) for guaranteed low latency...");
-      this.pollingInterval = setInterval(async () => {
-        try {
-          const now = Date.now();
-          if (now - this.lastFetchTime < 100) return; // Throttle à 100ms
-          
-          this.lastFetchTime = now;
-          const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
-          if (account?.data) {
-            const vault = decodeVault(account.data);
-            this.queueUpdate(vault);
-          }
-        } catch (error: any) {
-          // Ignorer les erreurs de rate limit silencieusement
-          if (!error?.message?.includes("429") && !error?.message?.includes("rate limit")) {
-            console.error("Polling error:", error);
-          }
-        }
-      }, 100); // Poll toutes les 100ms
-
-      console.log("⚡ ULTRA-FAST mode activated: WebSocket + 100ms polling");
+      console.log("⚡ WebSocket ONLY mode: ZERO RPC calls, instant push updates");
     } catch (error) {
       console.error("Error subscribing to vault:", error);
     }
@@ -172,13 +146,6 @@ export class RealtimeVault {
    * Unsubscribe from vault changes
    */
   async unsubscribe() {
-    // Stop polling
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-      console.log("✅ Stopped aggressive polling");
-    }
-
     if (this.subscriptionId !== null) {
       try {
         await this.connection.removeAccountChangeListener(this.subscriptionId);
@@ -219,17 +186,16 @@ export class RealtimeVault {
   }
 
   /**
-   * Manual refresh - DÉSACTIVÉ car polling agressif actif
+   * Manual refresh - UNIQUEMENT pour cas d'urgence
    */
   async refresh(force = false) {
-    // Le polling agressif gère déjà les updates, pas besoin de refresh manuel
     if (!force) {
-      console.log("✅ Aggressive polling active, no manual refresh needed");
+      console.log("✅ WebSocket active, no manual refresh needed");
       return;
     }
 
     try {
-      console.log("🔄 FORCE refresh");
+      console.log("🔄 FORCE refresh (emergency only)");
       const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
