@@ -272,7 +272,6 @@ export default function PlayPage() {
           Deposit: {
             leader: sessionWallet.publicKey.toBase58(),
             pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
-            timerStartSlot: vault.timerStartSlot, // Reset timer visuellement
           },
           Shield: {
             terminalLock: true,
