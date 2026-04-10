@@ -29,7 +29,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   
   const maxPot = Math.max(maxPotInHistory.current, 0.01);
 
-  // Gérer les points de données - TOUJOURS garder le 0 au début
+  // Gérer les points de données - RÉACTION INSTANTANÉE
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
@@ -41,26 +41,28 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       // Toujours commencer par 0
       const basePoints = prev.length === 0 ? [0] : prev;
       
-      // Si le pot a changé, ajouter le nouveau point
+      // INSTANTANÉ: Ajouter le nouveau point immédiatement
       const lastPoint = basePoints[basePoints.length - 1];
-      if (Math.abs(lastPoint - potValue) > 0.0001) {
-        // Garder minimum 20 points pour toujours voir le 0 à gauche
+      if (Math.abs(lastPoint - potValue) > 0.00001) { // Seuil très bas pour réactivité
         const newPoints = [...basePoints, potValue];
         return newPoints.length > 60 ? newPoints.slice(-60) : newPoints;
       }
       
       return basePoints;
     });
+  }, [potValue, isActive]); // Pas de dépendance sur dataPoints.length pour réactivité max
 
-    // Ajouter des points plats pour maintenir la courbe
+  // Ajouter des points plats MOINS souvent pour économiser
+  useEffect(() => {
+    if (!isActive) return;
+
     const interval = setInterval(() => {
       setDataPoints(prev => {
         if (prev.length === 0) return [0, potValue];
-        // Garder minimum 20 points
         const newPoints = [...prev, potValue];
         return newPoints.length > 60 ? newPoints.slice(-60) : newPoints;
       });
-    }, 1000);
+    }, 2000); // Toutes les 2s
 
     return () => clearInterval(interval);
   }, [potValue, isActive]);

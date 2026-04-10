@@ -257,35 +257,59 @@ export default function PlayPage() {
 
     setLoading(true);
     
-    if (realtimeVaultRef.current && vault) {
-      const optimisticUpdates: Record<string, Partial<NodusVault>> = {
-        Deposit: {
-          leader: sessionWallet.publicKey.toBase58(),
-          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
-        },
-        Shield: {
-          terminalLock: true,
-        },
-        Sabotage: {
-          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
-        },
-        Curse: {
-          curseCount: Math.min(5, vault.curseCount + 1),
-          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
-        },
-        Blizzard: {
-          pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
-        },
-      };
+    // UPDATE OPTIMISTE INSTANTANÉ - Afficher les changements IMMÉDIATEMENT
+    if (vault) {
+      const currentPot = parseFloat(pot);
+      const actionCost = action in ACTION_COSTS ? ACTION_COSTS[action as keyof typeof ACTION_COSTS] : 0;
+      const newPotValue = currentPot + (actionCost / 1_000_000_000);
+      
+      // Mettre à jour le POT instantanément (optimiste)
+      setPot(newPotValue.toFixed(4));
+      
+      // Mettre à jour le vault instantanément (optimiste)
+      if (realtimeVaultRef.current) {
+        const optimisticUpdates: Record<string, Partial<NodusVault>> = {
+          Deposit: {
+            leader: sessionWallet.publicKey.toBase58(),
+            pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
+            timerStartSlot: vault.timerStartSlot, // Reset timer visuellement
+          },
+          Shield: {
+            terminalLock: true,
+            pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
+          },
+          Sabotage: {
+            pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
+          },
+          Curse: {
+            curseCount: Math.min(5, vault.curseCount + 1),
+            pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
+          },
+          Blizzard: {
+            pressureCount: BigInt(Math.min(40, Number(vault.pressureCount) + 1)),
+          },
+        };
 
-      if (action in optimisticUpdates) {
-        realtimeVaultRef.current.applyOptimisticUpdate(() => optimisticUpdates[action]);
+        if (action in optimisticUpdates) {
+          realtimeVaultRef.current.applyOptimisticUpdate(() => optimisticUpdates[action]);
+        }
       }
+      
+      // Mettre à jour le balance instantanément (optimiste)
+      const currentBalance = parseFloat(sessionBalance);
+      const newBalance = currentBalance - (actionCost / 1_000_000_000) - 0.000005; // -5000 lamports de frais
+      setSessionBalance(Math.max(0, newBalance).toFixed(4));
     }
 
     try {
       const actionLabel = String(action);
-      const expiry = BigInt((await connection.getSlot("finalized")) + 90);
+      
+      // Utiliser "processed" au lieu de "finalized" pour vitesse maximale
+      const [expiry, { blockhash, lastValidBlockHeight }] = await Promise.all([
+        connection.getSlot("processed").then(slot => BigInt(slot + 90)),
+        connection.getLatestBlockhash("processed"), // ULTRA-RAPIDE
+      ]);
+      
       const leader = vault?.leader ? new PublicKey(vault.leader) : sessionWallet.publicKey;
       const instruction = buildActionInstruction({
         action,
@@ -298,7 +322,7 @@ export default function PlayPage() {
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = sessionWallet.publicKey;
       
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("finalized");
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("processed");
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
       
@@ -315,21 +339,25 @@ export default function PlayPage() {
       setLatestSignature(signature);
       showToast(`${actionLabel} executed successfully`, "success");
       
-      // Attendre la confirmation puis refresh UNE SEULE FOIS
+      // Attendre la confirmation puis refresh pour corriger si besoin
       connection.confirmTransaction(signature, "processed").then(() => {
         if (realtimeVaultRef.current) {
           realtimeVaultRef.current.refresh(true);
         }
+        
+        // Mettre à jour le balance réel
+        if (sessionWallet) {
+          connection.getBalance(sessionWallet.publicKey).then(bal => {
+            setSessionBalance(formatSolFromLamports(bal));
+          });
+        }
       }).catch(err => {
         console.error("Confirmation error:", err);
+        // En cas d'erreur, forcer un refresh pour revenir à l'état réel
+        if (realtimeVaultRef.current) {
+          realtimeVaultRef.current.refresh(true);
+        }
       });
-      
-      if (sessionWallet) {
-        setTimeout(async () => {
-          const bal = await connection.getBalance(sessionWallet.publicKey);
-          setSessionBalance(formatSolFromLamports(bal));
-        }, 500);
-      }
       
     } catch (actionError: any) {
       const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
@@ -340,8 +368,15 @@ export default function PlayPage() {
         showToast(`${String(action)} failed: ${errorMessage}`, "error");
       }
       
+      // En cas d'erreur, restaurer l'état réel
       if (realtimeVaultRef.current) {
-        console.log("❌ Action failed, WebSocket will restore correct state");
+        realtimeVaultRef.current.refresh(true);
+      }
+      
+      // Restaurer le balance réel
+      if (sessionWallet) {
+        const bal = await connection.getBalance(sessionWallet.publicKey);
+        setSessionBalance(formatSolFromLamports(bal));
       }
     } finally {
       setLoading(false);
