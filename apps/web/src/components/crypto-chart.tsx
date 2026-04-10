@@ -18,6 +18,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const animationRef = useRef<number | null>(null);
   const cycleStartTimeRef = useRef<number>(Date.now());
   const lastRemainingSecondsRef = useRef<number>(remainingSeconds);
+  const previousPointsRef = useRef<number[]>([]);
 
   const potValue = parseFloat(pot);
   const maxPot = Math.max(potValue, 0.01);
@@ -26,17 +27,20 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   useEffect(() => {
     // If remaining seconds increased significantly (more than 2 seconds), it's a reset
     if (remainingSeconds > lastRemainingSecondsRef.current + 2) {
+      // Save current points to continue from
+      previousPointsRef.current = [...dataPoints];
       // Reset cycle start time to now
       cycleStartTimeRef.current = Date.now();
-      console.log("🔄 Timer reset detected! Restarting animation from top");
+      console.log("🔄 Timer reset detected! Continuing curve from current position");
     }
     lastRemainingSecondsRef.current = remainingSeconds;
-  }, [remainingSeconds]);
+  }, [remainingSeconds, dataPoints]);
 
   // Générer courbe: ANIMATION CONTINUE FLUIDE
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
+      previousPointsRef.current = [];
       return;
     }
 
@@ -50,37 +54,81 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       
       const points: number[] = [];
       
-      // Phase de montée: 0.5 secondes max (instantané)
-      const riseTime = Math.min(0.5, maxSeconds * 0.05); // 5% du temps ou 0.5s max
-      const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
-      
-      if (elapsedSeconds <= riseTime) {
-        // En phase de montée - animation rapide
-        const currentPoints = Math.floor(riseProgress * 50); // 50 points pour la montée
-        for (let i = 0; i <= currentPoints; i++) {
-          const t = i / 50;
-          points.push(potValue * t);
+      // Si on a des points précédents (timer reset), on continue depuis là
+      if (previousPointsRef.current.length > 0) {
+        // Ajouter tous les points précédents
+        points.push(...previousPointsRef.current);
+        
+        // Calculer la valeur de départ (dernier point de la courbe précédente)
+        const startValue = previousPointsRef.current[previousPointsRef.current.length - 1];
+        
+        // Phase de remontée rapide depuis la position actuelle jusqu'au sommet
+        const riseTime = 0.5; // 0.5 secondes pour remonter
+        const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
+        
+        if (elapsedSeconds <= riseTime) {
+          // En phase de remontée depuis startValue jusqu'à potValue
+          const currentPoints = Math.floor(riseProgress * 50);
+          for (let i = 1; i <= currentPoints; i++) {
+            const t = i / 50;
+            const value = startValue + (potValue - startValue) * t;
+            points.push(value);
+          }
+        } else {
+          // Remontée complète, maintenant on descend
+          // Ajouter tous les points de remontée
+          for (let i = 1; i <= 50; i++) {
+            const t = i / 50;
+            const value = startValue + (potValue - startValue) * t;
+            points.push(value);
+          }
+          
+          // Phase de descente
+          const descendStart = riseTime;
+          const descendDuration = maxSeconds - riseTime;
+          const descendElapsed = elapsedSeconds - descendStart;
+          const descendProgress = Math.min(descendElapsed / descendDuration, 1);
+          
+          const descendPoints = Math.floor(descendProgress * 450);
+          for (let i = 0; i <= descendPoints; i++) {
+            const t = i / 450;
+            const value = potValue * (1 - t);
+            points.push(value);
+          }
+          
+          // Clear previous points after rise is complete
+          if (elapsedSeconds > riseTime + 0.1) {
+            previousPointsRef.current = [];
+          }
         }
       } else {
-        // Phase de descente - animation fluide
-        const descendStart = riseTime;
-        const descendDuration = maxSeconds - riseTime;
-        const descendElapsed = elapsedSeconds - descendStart;
-        const descendProgress = Math.min(descendElapsed / descendDuration, 1);
+        // Comportement normal (premier cycle ou pas de reset)
+        const riseTime = Math.min(0.5, maxSeconds * 0.05);
+        const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
         
-        // Ajouter les points de montée (complets)
-        for (let i = 0; i <= 50; i++) {
-          const t = i / 50;
-          points.push(potValue * t);
-        }
-        
-        // Ajouter les points de descente jusqu'au temps actuel
-        const descendPoints = Math.floor(descendProgress * 450); // 450 points pour la descente
-        for (let i = 0; i <= descendPoints; i++) {
-          const t = i / 450;
-          // Descend de 100% (de potValue à 0) proportionnellement au temps restant
-          const value = potValue * (1 - t);
-          points.push(value);
+        if (elapsedSeconds <= riseTime) {
+          const currentPoints = Math.floor(riseProgress * 50);
+          for (let i = 0; i <= currentPoints; i++) {
+            const t = i / 50;
+            points.push(potValue * t);
+          }
+        } else {
+          const descendStart = riseTime;
+          const descendDuration = maxSeconds - riseTime;
+          const descendElapsed = elapsedSeconds - descendStart;
+          const descendProgress = Math.min(descendElapsed / descendDuration, 1);
+          
+          for (let i = 0; i <= 50; i++) {
+            const t = i / 50;
+            points.push(potValue * t);
+          }
+          
+          const descendPoints = Math.floor(descendProgress * 450);
+          for (let i = 0; i <= descendPoints; i++) {
+            const t = i / 450;
+            const value = potValue * (1 - t);
+            points.push(value);
+          }
         }
       }
       
