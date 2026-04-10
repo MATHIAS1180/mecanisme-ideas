@@ -1,17 +1,70 @@
 :root {
+  /* Backgrounds */
   --bg: #07111a;
   --bg-soft: #0b1824;
+  --bg-darker: #041018;
+  --bg-darkest: #050810;
+  --bg-chart: #0a0e1a;
+  
+  /* Panels */
   --panel: rgba(9, 22, 33, 0.82);
   --panel-strong: rgba(7, 18, 28, 0.96);
+  
+  /* Borders */
   --line: rgba(125, 180, 214, 0.18);
+  
+  /* Text */
   --text: #edf7ff;
   --muted: #8ea9bc;
+  
+  /* Accents */
   --accent: #8cf5c5;
   --accent-2: #7dd3ff;
   --accent-3: #ffc86e;
   --danger: #ff8b87;
+  --warning: #ffaa00;
+  --success: #00ff88;
+  
+  /* Timer states */
+  --timer-normal: #ffffff;
+  --timer-warning: #ffaa00;
+  --timer-critical: #ff6b6b;
+  
+  /* Geometry */
   --radius: 22px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  
+  /* Typography scale (ratio 1.25) */
+  --font-size-xs: 0.64rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.563rem;
+  --font-size-2xl: 1.953rem;
+  --font-size-3xl: 2.441rem;
+  --font-size-4xl: 3.052rem;
+  --font-size-5xl: 3.815rem;
+  
+  /* Line heights */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+  
+  /* Spacing scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* Breakpoints (for reference in JS) */
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1280px;
+  --breakpoint-wide: 1440px;
 }
 
 * {
@@ -31,6 +84,33 @@ body {
     linear-gradient(180deg, #07111a 0%, #050b10 100%);
   color: var(--text);
   font-family: var(--font-display), sans-serif;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+/* Focus visible global */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 body::before {
@@ -115,7 +195,7 @@ input {
 .page-title h1 {
   margin: 0;
   font-size: clamp(48px, 8vw, 96px);
-  line-height: 0.92;
+  line-height: var(--line-height-tight);
   letter-spacing: -0.05em;
 }
 
@@ -125,7 +205,7 @@ input {
 .copy-block p,
 .faq-item p {
   color: var(--muted);
-  line-height: 1.7;
+  line-height: var(--line-height-relaxed);
 }
 
 .hero-panel {
@@ -286,9 +366,34 @@ input {
   color: var(--muted);
 }
 
+.site-nav a {
+  position: relative;
+  transition: color 0.2s ease;
+}
+
 .site-nav a:hover,
 .footer-links a:hover {
   color: var(--text);
+}
+
+.site-nav a.active {
+  color: var(--accent);
+}
+
+.site-nav a.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.devnet-badge {
+  color: var(--accent-3);
+  font-weight: 700;
 }
 
 .card-grid {
@@ -433,7 +538,7 @@ input {
   font-family: var(--font-display), sans-serif !important;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 768px) {
   .hero-copy,
   .hero-panel,
   .dual-grid > * {
@@ -460,7 +565,7 @@ input {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 480px) {
   .shell {
     width: min(100vw - 20px, 1200px);
   }

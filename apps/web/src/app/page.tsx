@@ -22,11 +22,11 @@ function LiveVaultPanel() {
         const v = await fetchVault(connection, programId);
         if (active) setVault(v);
       } catch (e) {
-        if (active) setError("Erreur de lecture du vault devnet");
+        if (active) setError("Unable to connect to devnet RPC. Check your connection or try again later.");
       }
     }
     refresh();
-    const poll = setInterval(refresh, 1000);
+    const poll = setInterval(refresh, 5000); // 5s instead of 1s to reduce RPC load
     return () => { active = false; clearInterval(poll); };
   }, []);
   return (

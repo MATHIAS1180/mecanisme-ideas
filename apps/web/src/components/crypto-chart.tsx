@@ -89,8 +89,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     const chartHeight = height - padding.top - padding.bottom;
 
     let lastFrameTime = 0;
-    const targetFPS = 120;
-    const frameInterval = 1000 / targetFPS; // ~8.33ms pour 120 FPS
+    const targetFPS = 60; // Reduced from 120 to 60 for better performance
+    const frameInterval = 1000 / targetFPS; // ~16.67ms for 60 FPS
 
     const animate = (currentTime: number) => {
       // Throttle à 120 FPS max

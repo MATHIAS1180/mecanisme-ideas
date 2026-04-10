@@ -22,11 +22,29 @@ export function WinnerNotification({ winner, payout, onClose }: WinnerNotificati
       setTimeout(onClose, 500);
     }, 8000);
 
-    return () => clearTimeout(timer);
+    // Handle Escape key
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setVisible(false);
+        setTimeout(onClose, 500);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [onClose]);
 
   return (
-    <div className={`winner-notification ${visible ? "winner-notification--visible" : ""}`}>
+    <div 
+      className={`winner-notification ${visible ? "winner-notification--visible" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="winner-title"
+    >
       <div className="winner-notification__content">
         <div className="winner-notification__confetti">
           {Array.from({ length: 30 }).map((_, i) => (
@@ -51,20 +69,20 @@ export function WinnerNotification({ winner, payout, onClose }: WinnerNotificati
 
         <div className="winner-notification__icon">🏆</div>
         
-        <h2 className="winner-notification__title">Cycle Terminé !</h2>
+        <h2 id="winner-title" className="winner-notification__title">Cycle Resolved!</h2>
         
         <div className="winner-notification__winner">
-          <span className="label">Gagnant</span>
+          <span className="label">Winner</span>
           <strong className="value">{winner}</strong>
         </div>
 
         <div className="winner-notification__payout">
-          <span className="label">Gains</span>
+          <span className="label">Payout</span>
           <strong className="value">{payout} SOL</strong>
         </div>
 
         <div className="winner-notification__message">
-          Un nouveau cycle commence maintenant !
+          A new cycle is starting now.
         </div>
 
         <button
@@ -73,8 +91,9 @@ export function WinnerNotification({ winner, payout, onClose }: WinnerNotificati
             setVisible(false);
             setTimeout(onClose, 500);
           }}
+          aria-label="Close notification and continue"
         >
-          Continuer
+          Continue
         </button>
       </div>
     </div>
