@@ -12,12 +12,9 @@ interface ToastProps {
 
 export function Toast({ message, type = "info", onClose, duration = 3000 }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, duration);
-
+    const timer = setTimeout(onClose, duration);
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [duration]); // Removed onClose from dependencies to prevent timer reset
 
   return (
     <>
