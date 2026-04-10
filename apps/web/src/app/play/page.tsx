@@ -15,13 +15,13 @@ import { Toast } from "../../components/toast";
 import { RealtimeVault } from "../../lib/realtime-vault";
 
 const ACTION_BUTTONS = [
-  ["Deposit", "Take leadership and reset the timer.", "💰"],
-  ["Shield", "Leader-only protection that blocks deposits briefly.", "🛡️"],
-  ["Sabotage", "Cut the remaining time without taking leadership.", "💣"],
-  ["Anchor", "Leader-only two-entry reset to full breathing room.", "⚓"],
-  ["ArmSnipe", "Escrow one entry and trap the next challenger.", "🎯"],
-  ["Curse", "Reduce the winner share and feed carry-over.", "👻"],
-  ["Blizzard", "Increase pot and pressure without taking the lead.", "❄️"],
+  ["Deposit", "Claim leadership and reset the countdown timer", "💰"],
+  ["Shield", "Leader-only protection that blocks incoming deposits", "🛡️"],
+  ["Sabotage", "Reduce remaining time without claiming leadership", "💣"],
+  ["Anchor", "Leader-only double-entry reset for maximum time", "⚓"],
+  ["ArmSnipe", "Escrow one entry and trap the next challenger", "🎯"],
+  ["Curse", "Reduce winner share and increase carry-over pool", "👻"],
+  ["Blizzard", "Increase pot and pressure without taking the lead", "❄️"],
 ] as const;
 
 export default function PlayPage() {
@@ -155,7 +155,7 @@ export default function PlayPage() {
 
   async function handleInitialize() {
     if (!connected || !publicKey || !sendTransaction || !programId) {
-      showToast("Connect a wallet and configure NEXT_PUBLIC_NODUS_PROGRAM_ID first.", "error");
+      showToast("Connect wallet to initialize protocol", "error");
       return;
     }
 
@@ -164,9 +164,9 @@ export default function PlayPage() {
       const instruction = buildInitializeInstruction(programId, publicKey);
       const transaction = await sendTransaction(new Transaction().add(instruction), connection);
       setLatestSignature(transaction);
-      showToast("Vault initialize transaction sent.", "success");
+      showToast("Protocol vault initialized successfully", "success");
     } catch (initializeError) {
-      showToast(initializeError instanceof Error ? initializeError.message : "Initialize failed.", "error");
+      showToast(initializeError instanceof Error ? initializeError.message : "Initialize failed", "error");
     } finally {
       setLoading(false);
     }
@@ -174,7 +174,7 @@ export default function PlayPage() {
 
   async function handleFundSession() {
     if (!connected || !publicKey || !sendTransaction) {
-      showToast("Connect a wallet before funding a session wallet.", "error");
+      showToast("Connect wallet to fund session", "error");
       return;
     }
 
@@ -200,7 +200,7 @@ export default function PlayPage() {
       setSessionWallet(wallet);
       setLatestSignature(signature);
       setSessionNotice("✅ Session wallet funded!");
-      showToast("Session wallet funded! Confirmation en cours...", "success");
+      showToast("Session wallet funded successfully", "success");
       
       setTimeout(async () => {
         const bal = await connection.getBalance(wallet.publicKey);
@@ -208,7 +208,7 @@ export default function PlayPage() {
       }, 1000);
       
     } catch (fundError) {
-      showToast(fundError instanceof Error ? fundError.message : "Funding failed.", "error");
+      showToast(fundError instanceof Error ? fundError.message : "Funding failed", "error");
     } finally {
       setLoading(false);
     }
@@ -216,7 +216,7 @@ export default function PlayPage() {
 
   async function handleSweepSession() {
     if (!sessionWallet || !publicKey) {
-      showToast("No active session wallet found.", "error");
+      showToast("No active session wallet found", "error");
       return;
     }
 
@@ -228,7 +228,7 @@ export default function PlayPage() {
         destination: publicKey,
       });
       if (!transaction) {
-        showToast("Session wallet is already empty.", "info");
+        showToast("Session wallet is empty", "info");
         return;
       }
       const signature = await connection.sendRawTransaction(transaction.serialize());
@@ -236,9 +236,9 @@ export default function PlayPage() {
       setSessionWallet(null);
       setLatestSignature(signature);
       setSessionNotice(null);
-      showToast("Remaining session balance sent back to the connected wallet.", "success");
+      showToast("Session balance returned to main wallet", "success");
     } catch (sweepError) {
-      showToast(sweepError instanceof Error ? sweepError.message : "Sweep failed.", "error");
+      showToast(sweepError instanceof Error ? sweepError.message : "Sweep failed", "error");
     } finally {
       setLoading(false);
     }
@@ -246,7 +246,7 @@ export default function PlayPage() {
 
   async function handleAction(action: keyof typeof ACTION_COSTS | "Resolve") {
     if (!programId || !sessionWallet) {
-      showToast("Program ID and funded session wallet are required before sending cycle actions.", "error");
+      showToast("Session wallet required for protocol actions", "error");
       return;
     }
 
@@ -308,7 +308,7 @@ export default function PlayPage() {
       );
       
       setLatestSignature(signature);
-      showToast(`${actionLabel} envoyé! Confirmation en cours...`, "success");
+      showToast(`${actionLabel} executed successfully`, "success");
       
       if (sessionWallet) {
         setTimeout(async () => {
@@ -321,9 +321,9 @@ export default function PlayPage() {
       const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
       
       if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
-        showToast("RPC Rate Limit Atteint - Réessaye dans quelques secondes.", "warning");
+        showToast("RPC rate limit reached - retry in a moment", "warning");
       } else {
-        showToast(`Erreur ${String(action)}: ${errorMessage}`, "error");
+        showToast(`${String(action)} failed: ${errorMessage}`, "error");
       }
       
       if (realtimeVaultRef.current) {
@@ -338,19 +338,19 @@ export default function PlayPage() {
     <>
       <section className="section shell">
         {!programId && (
-          <div className="notice notice--warning">⚠️ Aucun program ID configuré.</div>
+          <div className="notice notice--warning">⚠️ No program ID configured</div>
         )}
         
         {programId && vault === null && !loading && (
           <div className="notice notice--warning">
-            ⚠️ Le vault n&apos;est pas initialisé.
+            ⚠️ Protocol vault not initialized
             <button 
               className="button button--primary" 
               onClick={handleInitialize} 
               disabled={!connected || loading}
               style={{marginTop: '0.5rem'}}
             >
-              🚀 Initialize Vault
+              🚀 Initialize Protocol Vault
             </button>
           </div>
         )}
@@ -457,8 +457,8 @@ export default function PlayPage() {
               <div className="cycle-graph">
                 <div className="cycle-graph__empty">
                   <div className="cycle-graph__empty-icon">🎮</div>
-                  <h3>Aucun cycle actif</h3>
-                  <p>Clique sur &quot;Deposit&quot; pour démarrer!</p>
+                  <h3>No Active Cycle</h3>
+                  <p>Click &quot;Deposit&quot; to start a new cycle!</p>
                 </div>
               </div>
             )}
@@ -510,7 +510,7 @@ export default function PlayPage() {
           message={toastMessage}
           type={toastType}
           onClose={() => setToastMessage(null)}
-          duration={3000}
+          duration={1000}
         />
       )}
     </>
