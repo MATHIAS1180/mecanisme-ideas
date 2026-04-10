@@ -452,6 +452,15 @@ export default function PlayPage() {
                 <button className="btn-compact btn-secondary" onClick={handleSweepSession} disabled={loading || !sessionWallet}>Sweep</button>
               </div>
             </div>
+            
+            {/* Nouveau bloc: Cycle Info */}
+            <div className="control-card">
+              <h3>📊 Cycle Info</h3>
+              <div className="compact-stats">
+                <div><span>Cycle</span><strong>#{vault ? String(vault.cycleNumber) : "-"}</strong></div>
+                <div><span>Pressure</span><strong>{vault ? String(vault.pressureCount) : "-"} / 40</strong></div>
+              </div>
+            </div>
           </div>
 
           {/* Chart central */}

@@ -45,7 +45,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
     lastRemainingSecondsRef.current = remainingSeconds;
   }, [remainingSeconds, dataPoints]);
 
-  // Générer courbe: MONTE AVEC LE POT, RESTE PLATE
+  // Générer courbe: MONTE AVEC LE POT, RESTE PLATE, START À 0
   useEffect(() => {
     if (!isActive) {
       setDataPoints([]);
@@ -61,6 +61,11 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       // Elle monte quand le pot augmente, reste plate sinon
       
       setDataPoints(prev => {
+        // Si c'est le premier point, commencer à 0
+        if (prev.length === 0) {
+          return [0, potValue];
+        }
+        
         const newPoints = [...prev, potValue];
         // Garder les 100 derniers points
         return newPoints.slice(-100);
@@ -216,6 +221,16 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         ctx.stroke();
       }
 
+      // Timer au centre
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+      const timeStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      
+      ctx.font = "bold 48px monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = remainingSeconds <= 10 ? "#ff6b6b" : "#ffffff";
+      ctx.fillText(timeStr, width / 2, height / 2);
+
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -235,20 +250,6 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         className="crypto-chart__canvas"
         style={{ height: 'clamp(200px, 35vh, 380px)' }}
       />
-      <div className="crypto-chart__stats">
-        <div className="crypto-chart__stat">
-          <span className="crypto-chart__label">POT</span>
-          <span className="crypto-chart__value crypto-chart__value--pot">{pot} SOL</span>
-        </div>
-        <div className="crypto-chart__stat">
-          <span className="crypto-chart__label">LEADER</span>
-          <span className="crypto-chart__value">{leader}</span>
-        </div>
-        <div className="crypto-chart__stat">
-          <span className="crypto-chart__label">PRESSURE</span>
-          <span className="crypto-chart__value crypto-chart__value--pressure">{pressure} / 40</span>
-        </div>
-      </div>
     </div>
   );
 }
