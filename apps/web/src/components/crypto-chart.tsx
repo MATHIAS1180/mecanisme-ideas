@@ -47,28 +47,38 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       const progress = Math.min(Math.max(elapsedSeconds / maxSeconds, 0), 1);
       
       const points: number[] = [];
-      const numPoints = 60;
+      const numPoints = 120; // Plus de points pour plus de fluidité
       
-      // Générer points seulement jusqu'au temps actuel
-      const currentPointIndex = Math.floor(progress * numPoints);
+      // Phase de montée: 0.5 secondes max (instantané)
+      const riseTime = Math.min(0.5, maxSeconds * 0.05); // 5% du temps ou 0.5s max
+      const riseProgress = Math.min(elapsedSeconds / riseTime, 1);
       
-      for (let i = 0; i <= currentPointIndex; i++) {
-        const t = i / numPoints;
+      if (elapsedSeconds <= riseTime) {
+        // En phase de montée - animation rapide
+        const currentPoints = Math.floor(riseProgress * 20); // 20 points pour la montée
+        for (let i = 0; i <= currentPoints; i++) {
+          const t = i / 20;
+          points.push(potValue * t);
+        }
+      } else {
+        // Phase de descente - animation fluide
+        const descendStart = riseTime;
+        const descendDuration = maxSeconds - riseTime;
+        const descendElapsed = elapsedSeconds - descendStart;
+        const descendProgress = Math.min(descendElapsed / descendDuration, 1);
         
-        if (t <= 0.15) {
-          // Phase montée (15% du temps): 0 → potValue - INSTANTANÉ
-          const riseProgress = t / 0.15;
-          points.push(potValue * riseProgress);
-        } else {
-          // Phase descente (85% du temps): descend progressivement
-          const fallProgress = (t - 0.15) / 0.85;
-          const normalizedProgress = (progress - 0.15) / 0.85;
-          
-          if (fallProgress <= normalizedProgress) {
-            // Point dans le passé - calculer la valeur
-            const descendProgress = fallProgress;
-            points.push(potValue * (1 - descendProgress * 0.4));
-          }
+        // Ajouter les points de montée (complets)
+        for (let i = 0; i <= 20; i++) {
+          const t = i / 20;
+          points.push(potValue * t);
+        }
+        
+        // Ajouter les points de descente jusqu'au temps actuel
+        const descendPoints = Math.floor(descendProgress * 100); // 100 points pour la descente
+        for (let i = 0; i <= descendPoints; i++) {
+          const t = i / 100;
+          const value = potValue * (1 - t * 0.4); // Descend de 40%
+          points.push(value);
         }
       }
       
