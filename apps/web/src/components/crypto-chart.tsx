@@ -75,7 +75,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         const descendPoints = Math.floor(descendProgress * 450); // 450 points pour la descente
         for (let i = 0; i <= descendPoints; i++) {
           const t = i / 450;
-          const value = potValue * (1 - t * 0.4); // Descend de 40%
+          // Descend de 100% (de potValue à 0) proportionnellement au temps restant
+          const value = potValue * (1 - t);
           points.push(value);
         }
       }
@@ -155,10 +156,36 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
           y: padding.top + chartHeight - (value / maxPot) * chartHeight,
         }));
 
-        // Gradient fill
+        // Calculer la couleur basée sur le temps restant (vert -> jaune -> orange -> rouge)
+        const timeProgress = remainingSeconds / maxSeconds;
+        let lineColor: string;
+        let fillColorTop: string;
+        let fillColorBottom: string;
+        
+        if (timeProgress > 0.5) {
+          // Vert à jaune (50% - 100%)
+          const t = (timeProgress - 0.5) * 2; // 0 à 1
+          lineColor = `rgb(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))})`;
+          fillColorTop = `rgba(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))}, 0.3)`;
+          fillColorBottom = `rgba(${Math.floor(140 + (255 - 140) * (1 - t))}, ${Math.floor(245 - (245 - 200) * (1 - t))}, ${Math.floor(197 - 197 * (1 - t))}, 0.0)`;
+        } else if (timeProgress > 0.2) {
+          // Jaune à orange (20% - 50%)
+          const t = (timeProgress - 0.2) / 0.3; // 0 à 1
+          lineColor = `rgb(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0)`;
+          fillColorTop = `rgba(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0, 0.3)`;
+          fillColorBottom = `rgba(255, ${Math.floor(200 - (200 - 140) * (1 - t))}, 0, 0.0)`;
+        } else {
+          // Orange à rouge (0% - 20%)
+          const t = timeProgress / 0.2; // 0 à 1
+          lineColor = `rgb(255, ${Math.floor(140 * t)}, 0)`;
+          fillColorTop = `rgba(255, ${Math.floor(140 * t)}, 0, 0.3)`;
+          fillColorBottom = `rgba(255, ${Math.floor(140 * t)}, 0, 0.0)`;
+        }
+
+        // Gradient fill avec couleur dynamique
         const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-        gradient.addColorStop(0, "rgba(140, 245, 197, 0.3)");
-        gradient.addColorStop(1, "rgba(140, 245, 197, 0.0)");
+        gradient.addColorStop(0, fillColorTop);
+        gradient.addColorStop(1, fillColorBottom);
 
         ctx.beginPath();
         ctx.moveTo(points[0].x, height - padding.bottom);
@@ -208,15 +235,15 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
           }
         }
 
-        ctx.strokeStyle = "#8cf5c5";
+        ctx.strokeStyle = lineColor;
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Point actuel
+        // Point actuel avec couleur dynamique
         const lastPoint = points[points.length - 1];
         ctx.beginPath();
         ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = "#8cf5c5";
+        ctx.fillStyle = lineColor;
         ctx.fill();
         ctx.strokeStyle = "#0a1f1a";
         ctx.lineWidth = 2;
@@ -243,7 +270,7 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [dataPoints, remainingSeconds, maxPot]);
+  }, [dataPoints, remainingSeconds, maxSeconds, maxPot]);
 
   return (
     <div className="crypto-chart">
