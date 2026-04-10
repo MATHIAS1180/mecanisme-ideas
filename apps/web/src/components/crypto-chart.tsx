@@ -44,10 +44,8 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       const now = Date.now();
       const elapsedMs = now - cycleStartTimeRef.current;
       const elapsedSeconds = elapsedMs / 1000;
-      const progress = Math.min(Math.max(elapsedSeconds / maxSeconds, 0), 1);
       
       const points: number[] = [];
-      const numPoints = 200; // ULTRA FLUIDE - 200 points
       
       // Phase de montée: 0.5 secondes max (instantané)
       const riseTime = Math.min(0.5, maxSeconds * 0.05); // 5% du temps ou 0.5s max
@@ -55,9 +53,9 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       
       if (elapsedSeconds <= riseTime) {
         // En phase de montée - animation rapide
-        const currentPoints = Math.floor(riseProgress * 30); // 30 points pour la montée
+        const currentPoints = Math.floor(riseProgress * 50); // 50 points pour la montée
         for (let i = 0; i <= currentPoints; i++) {
-          const t = i / 30;
+          const t = i / 50;
           points.push(potValue * t);
         }
       } else {
@@ -68,15 +66,15 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         const descendProgress = Math.min(descendElapsed / descendDuration, 1);
         
         // Ajouter les points de montée (complets)
-        for (let i = 0; i <= 30; i++) {
-          const t = i / 30;
+        for (let i = 0; i <= 50; i++) {
+          const t = i / 50;
           points.push(potValue * t);
         }
         
         // Ajouter les points de descente jusqu'au temps actuel
-        const descendPoints = Math.floor(descendProgress * 170); // 170 points pour la descente
+        const descendPoints = Math.floor(descendProgress * 450); // 450 points pour la descente
         for (let i = 0; i <= descendPoints; i++) {
-          const t = i / 170;
+          const t = i / 450;
           const value = potValue * (1 - t * 0.4); // Descend de 40%
           points.push(value);
         }

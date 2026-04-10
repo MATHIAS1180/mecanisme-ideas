@@ -11,6 +11,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { CryptoChart } from "../../components/crypto-chart";
 import { WinnerNotification } from "../../components/winner-notification";
+import { Toast } from "../../components/toast";
 import { RealtimeVault } from "../../lib/realtime-vault";
 
 const ACTION_BUTTONS = [
@@ -29,22 +30,26 @@ export default function PlayPage() {
   const [sessionWallet, setSessionWallet] = useState(() => loadSessionWallet());
   const [budget, setBudget] = useState("0.03");
   const [vault, setVault] = useState<NodusVault | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [latestSignature, setLatestSignature] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(15);
   const [pot, setPot] = useState<string>("0.0000");
   const [sessionBalance, setSessionBalance] = useState<string>("0.0000");
-  const [userStake, setUserStake] = useState<string>("0.0000");
-  const [cycleStatus, setCycleStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [lastTimerStart, setLastTimerStart] = useState<bigint | null>(null);
-  const [lastCycleNumber, setLastCycleNumber] = useState<bigint | null>(null);
   const [showWinnerNotification, setShowWinnerNotification] = useState(false);
   const [winnerData, setWinnerData] = useState<{ winner: string; payout: string } | null>(null);
   
+  // Toast notification system
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<"success" | "error" | "info" | "warning">("info");
+  
   const programId = getProgramId();
   const realtimeVaultRef = useRef<RealtimeVault | null>(null);
+
+  // Helper to show toast notifications
+  const showToast = (message: string, type: "success" | "error" | "info" | "warning" = "info") => {
+    setToastMessage(message);
+    setToastType(type);
+  };
 
   // WebSocket setup
   useEffect(() => {
@@ -68,13 +73,9 @@ export default function PlayPage() {
       }
       
       setVault(nextVault);
-      setLastTimerStart(nextVault.timerStartSlot);
-      setLastCycleNumber(nextVault.cycleNumber);
 
       if (isNewCycle) {
-        setNotice(null);
-        setError(null);
-        setCycleStatus("");
+        setLatestSignature(null);
       }
     };
 
@@ -102,12 +103,6 @@ export default function PlayPage() {
         const secondsLeft = Math.floor(slotsLeft * 0.45);
         
         setRemainingSeconds(secondsLeft);
-        
-        if (secondsLeft === 0 && remainingSeconds > 0) {
-          setCycleStatus("⏳ Cycle expiré - Le keeper bot va le résoudre automatiquement...");
-        } else if (secondsLeft > 0) {
-          setCycleStatus("");
-        }
       } catch (error) {
         console.error("Error updating timer:", error);
       }
@@ -157,19 +152,18 @@ export default function PlayPage() {
 
   async function handleInitialize() {
     if (!connected || !publicKey || !sendTransaction || !programId) {
-      setError("Connect a wallet and configure NEXT_PUBLIC_NODUS_PROGRAM_ID first.");
+      showToast("Connect a wallet and configure NEXT_PUBLIC_NODUS_PROGRAM_ID first.", "error");
       return;
     }
 
     setLoading(true);
-    setError(null);
     try {
       const instruction = buildInitializeInstruction(programId, publicKey);
       const transaction = await sendTransaction(new Transaction().add(instruction), connection);
       setLatestSignature(transaction);
-      setNotice("Vault initialize transaction sent.");
+      showToast("Vault initialize transaction sent.", "success");
     } catch (initializeError) {
-      setError(initializeError instanceof Error ? initializeError.message : "Initialize failed.");
+      showToast(initializeError instanceof Error ? initializeError.message : "Initialize failed.", "error");
     } finally {
       setLoading(false);
     }
@@ -177,12 +171,11 @@ export default function PlayPage() {
 
   async function handleFundSession() {
     if (!connected || !publicKey || !sendTransaction) {
-      setError("Connect a wallet before funding a session wallet.");
+      showToast("Connect a wallet before funding a session wallet.", "error");
       return;
     }
 
     setLoading(true);
-    setError(null);
     try {
       const wallet = sessionWallet ?? createSessionWallet();
       const lamports = Math.max(0.03, Number(budget || "0.03")) * 1_000_000_000;
@@ -203,7 +196,7 @@ export default function PlayPage() {
       
       setSessionWallet(wallet);
       setLatestSignature(signature);
-      setNotice("✅ Session wallet funded! Confirmation en cours...");
+      showToast("Session wallet funded! Confirmation en cours...", "success");
       
       setTimeout(async () => {
         const bal = await connection.getBalance(wallet.publicKey);
@@ -211,7 +204,7 @@ export default function PlayPage() {
       }, 1000);
       
     } catch (fundError) {
-      setError(fundError instanceof Error ? fundError.message : "Funding failed.");
+      showToast(fundError instanceof Error ? fundError.message : "Funding failed.", "error");
     } finally {
       setLoading(false);
     }
@@ -219,12 +212,11 @@ export default function PlayPage() {
 
   async function handleSweepSession() {
     if (!sessionWallet || !publicKey) {
-      setError("No active session wallet found.");
+      showToast("No active session wallet found.", "error");
       return;
     }
 
     setLoading(true);
-    setError(null);
     try {
       const transaction = await buildSweepTransaction({
         connection,
@@ -232,16 +224,16 @@ export default function PlayPage() {
         destination: publicKey,
       });
       if (!transaction) {
-        setNotice("Session wallet is already empty.");
+        showToast("Session wallet is already empty.", "info");
         return;
       }
       const signature = await connection.sendRawTransaction(transaction.serialize());
       clearSessionWallet();
       setSessionWallet(null);
       setLatestSignature(signature);
-      setNotice("Remaining session balance sent back to the connected wallet.");
+      showToast("Remaining session balance sent back to the connected wallet.", "success");
     } catch (sweepError) {
-      setError(sweepError instanceof Error ? sweepError.message : "Sweep failed.");
+      showToast(sweepError instanceof Error ? sweepError.message : "Sweep failed.", "error");
     } finally {
       setLoading(false);
     }
@@ -249,12 +241,11 @@ export default function PlayPage() {
 
   async function handleAction(action: keyof typeof ACTION_COSTS | "Resolve") {
     if (!programId || !sessionWallet) {
-      setError("Program ID and funded session wallet are required before sending cycle actions.");
+      showToast("Program ID and funded session wallet are required before sending cycle actions.", "error");
       return;
     }
 
     setLoading(true);
-    setError(null);
     
     if (realtimeVaultRef.current && vault) {
       const optimisticUpdates: Record<string, Partial<NodusVault>> = {
@@ -312,7 +303,7 @@ export default function PlayPage() {
       );
       
       setLatestSignature(signature);
-      setNotice(`✅ ${actionLabel} envoyé! Confirmation en cours...`);
+      showToast(`${actionLabel} envoyé! Confirmation en cours...`, "success");
       
       if (sessionWallet) {
         setTimeout(async () => {
@@ -325,9 +316,9 @@ export default function PlayPage() {
       const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
       
       if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
-        setError(`⚠️ RPC Rate Limit Atteint - Réessaye dans quelques secondes.`);
+        showToast("RPC Rate Limit Atteint - Réessaye dans quelques secondes.", "warning");
       } else {
-        setError(`❌ Erreur ${String(action)}: ${errorMessage}`);
+        showToast(`Erreur ${String(action)}: ${errorMessage}`, "error");
       }
       
       if (realtimeVaultRef.current) {
@@ -359,12 +350,11 @@ export default function PlayPage() {
           </div>
         )}
 
-        {notice && <div className="notice notice--success">{notice}</div>}
-        {error && <div className="notice notice--danger">{error}</div>}
+        {/* Transaction signature link stays in wallet block */}
         {latestSignature && (
-          <div className="notice notice--info">
+          <div className="notice notice--info" style={{ marginBottom: '1rem' }}>
             🔗 <a href={`https://explorer.solana.com/tx/${latestSignature}?cluster=devnet`} target="_blank" rel="noopener noreferrer">
-              {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
+              View on Solana Explorer: {latestSignature.slice(0, 8)}...{latestSignature.slice(-8)}
             </a>
           </div>
         )}
@@ -477,6 +467,16 @@ export default function PlayPage() {
             setShowWinnerNotification(false);
             setWinnerData(null);
           }}
+        />
+      )}
+
+      {/* Toast notifications - centered, non-displacing */}
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setToastMessage(null)}
+          duration={3000}
         />
       )}
     </>
