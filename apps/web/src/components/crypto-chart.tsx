@@ -88,7 +88,11 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         // Easing function (ease-out cubic) pour une animation naturelle
         const easeProgress = 1 - Math.pow(1 - progress, 3);
         
-        const currentValue = startValue + (targetValue - startValue) * easeProgress;
+        // IMPORTANT: Ne JAMAIS dépasser la valeur cible
+        const currentValue = Math.min(
+          startValue + (targetValue - startValue) * easeProgress,
+          targetValue
+        );
         
         setDataPoints(prev => {
           const newPoints = [...prev, currentValue];
@@ -99,7 +103,11 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
         if (progress < 1) {
           animFrame = requestAnimationFrame(animate);
         } else {
-          // Animation terminée
+          // Animation terminée - ajouter le point final EXACT
+          setDataPoints(prev => {
+            const newPoints = [...prev, targetValue];
+            return newPoints.slice(-100);
+          });
           animatingToRef.current = null;
         }
       };
