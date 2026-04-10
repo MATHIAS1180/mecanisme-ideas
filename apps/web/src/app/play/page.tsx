@@ -486,8 +486,8 @@ export default function PlayPage() {
                   
                   // Bloquer les actions spéciales si l'utilisateur n'a pas encore fait de deposit dans ce cycle
                   // On vérifie si le vault a un leader ET si ce n'est pas l'utilisateur
-                  const cycleHasLeader = vault && vault.leader && vault.leader !== "11111111111111111111111111111111";
-                  const userIsLeader = sessionWallet && vault && vault.leader === sessionWallet.publicKey.toBase58();
+                  const cycleHasLeader = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
+                  const userIsLeader = !!(sessionWallet && vault && vault.leader === sessionWallet.publicKey.toBase58());
                   const userHasDeposited = cycleHasLeader && userIsLeader;
                   
                   // Seul Deposit est toujours autorisé, les autres actions nécessitent d'avoir fait un deposit
