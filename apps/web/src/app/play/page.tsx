@@ -350,30 +350,6 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Stats bar en haut */}
-        <div className="stats-bar">
-          <div className="stat-item">
-            <span className="stat-label">Cycle</span>
-            <strong className="stat-value">{vault ? String(vault.cycleNumber) : "-"}</strong>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Leader</span>
-            <strong className="stat-value">{shortenAddress(vault?.leader || "Live")}</strong>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Timer</span>
-            <strong className="stat-value">{formatCountdown(remainingSeconds)}</strong>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Pot</span>
-            <strong className="stat-value">{pot} SOL</strong>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Pressure</span>
-            <strong className="stat-value">{vault ? String(vault.pressureCount) : "-"}/40</strong>
-          </div>
-        </div>
-
         {/* Layout principal: Chart au centre, contrôles sur les côtés */}
         <div className="game-layout">
           {/* Sidebar gauche: Wallet */}
