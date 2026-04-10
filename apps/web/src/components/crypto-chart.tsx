@@ -52,12 +52,12 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       const elapsedMs = now - cycleStartTimeRef.current;
       const elapsedSeconds = elapsedMs / 1000;
       
-      const points: number[] = [];
+      let points: number[] = [];
       
-      // Si on a des points précédents (timer reset), on continue depuis là
+      // Si on a des points précédents (timer reset), on les garde et on continue
       if (previousPointsRef.current.length > 0) {
-        // Ajouter tous les points précédents
-        points.push(...previousPointsRef.current);
+        // Garder TOUS les points précédents (l'historique complet)
+        points = [...previousPointsRef.current];
         
         // Calculer la valeur de départ (dernier point de la courbe précédente)
         const startValue = previousPointsRef.current[previousPointsRef.current.length - 1];
@@ -83,22 +83,17 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
             points.push(value);
           }
           
-          // Phase de descente
+          // Phase de descente depuis le sommet
           const descendStart = riseTime;
           const descendDuration = maxSeconds - riseTime;
           const descendElapsed = elapsedSeconds - descendStart;
           const descendProgress = Math.min(descendElapsed / descendDuration, 1);
           
           const descendPoints = Math.floor(descendProgress * 450);
-          for (let i = 0; i <= descendPoints; i++) {
+          for (let i = 1; i <= descendPoints; i++) {
             const t = i / 450;
             const value = potValue * (1 - t);
             points.push(value);
-          }
-          
-          // Clear previous points after rise is complete
-          if (elapsedSeconds > riseTime + 0.1) {
-            previousPointsRef.current = [];
           }
         }
       } else {
