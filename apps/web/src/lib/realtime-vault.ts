@@ -26,8 +26,8 @@ export class RealtimeVault {
 
   /**
    * Subscribe to vault changes in real-time via WebSocket
-   * STRATÉGIE: WebSocket UNIQUEMENT, pas de polling!
-   * Commitment "confirmed" pour équilibre vitesse/fiabilité
+   * STRATÉGIE: WebSocket ULTRA-RAPIDE avec "processed" commitment
+   * Target: 100ms latency
    */
   async subscribe() {
     if (this.subscriptionId !== null) {
@@ -38,7 +38,7 @@ export class RealtimeVault {
     try {
       // Initial fetch UNIQUE (pas de retry pour économiser RPC)
       console.log("⚡ Fetching initial vault state (ONE TIME)...");
-      const account = await this.connection.getAccountInfo(this.vaultPda, "confirmed");
+      const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
         console.log("✅ Initial vault loaded:", {
@@ -52,16 +52,16 @@ export class RealtimeVault {
         console.error("❌ Vault account not found!");
       }
 
-      // Subscribe to changes via WebSocket avec "confirmed" commitment
-      // "confirmed" = bon équilibre entre vitesse (~400ms) et fiabilité
-      console.log("📡 Subscribing to WebSocket updates (confirmed commitment)...");
+      // Subscribe to changes via WebSocket avec "processed" commitment
+      // "processed" = ULTRA-RAPIDE (~100ms) mais peut être rollback
+      console.log("📡 Subscribing to WebSocket updates (processed = ULTRA-FAST 100ms)...");
       this.subscriptionId = this.connection.onAccountChange(
         this.vaultPda,
         (accountInfo) => {
           try {
             if (accountInfo.data) {
               const vault = decodeVault(accountInfo.data);
-              console.log("📡 WebSocket update:", {
+              console.log("⚡ WebSocket update (100ms):", {
                 cycle: vault.cycleNumber.toString(),
                 leader: vault.leader,
                 pressure: vault.pressureCount.toString(),
@@ -73,10 +73,10 @@ export class RealtimeVault {
             console.error("Error decoding vault:", error);
           }
         },
-        "confirmed" // Équilibre vitesse/fiabilité
+        "processed" // ULTRA-RAPIDE: ~100ms latency
       );
 
-      console.log("⚡ WebSocket subscribed (confirmed, ~400ms latency, NO POLLING)");
+      console.log("⚡ WebSocket subscribed (processed, ~100ms latency, NO POLLING)");
     } catch (error) {
       console.error("Error subscribing to vault:", error);
     }
@@ -101,6 +101,7 @@ export class RealtimeVault {
 
   /**
    * Process queued updates en batch
+   * OPTIMISÉ: Pas de throttle, updates instantanés!
    */
   private processQueue() {
     this.rafId = null;
@@ -111,16 +112,8 @@ export class RealtimeVault {
     const latestVault = this.updateQueue[this.updateQueue.length - 1];
     this.updateQueue = [];
 
-    // Throttle: max 1 update toutes les 16ms (60 FPS)
-    const now = Date.now();
-    if (now - this.lastUpdateTime < 16) {
-      // Re-queue si trop rapide
-      this.updateQueue.push(latestVault);
-      this.rafId = requestAnimationFrame(() => this.processQueue());
-      return;
-    }
-
-    this.lastUpdateTime = now;
+    // PAS DE THROTTLE - Updates instantanés pour 100ms latency
+    this.lastUpdateTime = Date.now();
     this.lastVault = latestVault;
     this.notifyListeners(latestVault);
   }
@@ -219,7 +212,7 @@ export class RealtimeVault {
       console.log(force ? "🔄 FORCE refresh (cycle bloqué)" : "🔄 Manual refresh (WebSocket fallback)");
       this.lastFetchTime = now;
       
-      const account = await this.connection.getAccountInfo(this.vaultPda, "confirmed");
+      const account = await this.connection.getAccountInfo(this.vaultPda, "processed");
       if (account?.data) {
         const vault = decodeVault(account.data);
         console.log("✅ Refresh complete:", {

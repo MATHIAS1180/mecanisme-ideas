@@ -17,7 +17,6 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
   const [dataPoints, setDataPoints] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
   const lastPotValueRef = useRef<number>(0);
-  const currentCycleRef = useRef<number | null>(null);
 
   const potValue = parseFloat(pot);
   const maxPotInHistory = useRef(potValue);
@@ -38,19 +37,28 @@ export function CryptoChart({ remainingSeconds, maxSeconds, pressure, pot, leade
       setDataPoints([]);
       lastPotValueRef.current = 0;
       maxPotInHistory.current = 0;
-      currentCycleRef.current = null;
       return;
     }
 
-    // Ajouter un point UNIQUEMENT si le pot a changé (dépôt ou action)
-    if (potValue !== lastPotValueRef.current) {
+    // Ajouter un point UNIQUEMENT si le pot a changé significativement (>0.0001 SOL)
+    const potDiff = Math.abs(potValue - lastPotValueRef.current);
+    if (potDiff > 0.0001) {
       setDataPoints(prev => {
         // Si c'est le premier point du cycle, commencer à 0
         if (prev.length === 0) {
           return [0, potValue];
         }
         
-        const newPoints = [...prev, potValue];
+        // Ajouter des points intermédiaires pour une courbe lisse (pas de ligne droite)
+        const lastValue = prev[prev.length - 1];
+        const steps = 5; // 5 points intermédiaires pour transition smooth
+        const newPoints = [...prev];
+        
+        for (let i = 1; i <= steps; i++) {
+          const interpolated = lastValue + (potValue - lastValue) * (i / steps);
+          newPoints.push(interpolated);
+        }
+        
         // Garder les 100 derniers points
         return newPoints.slice(-100);
       });
