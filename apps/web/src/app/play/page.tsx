@@ -484,14 +484,18 @@ export default function PlayPage() {
                 {ACTION_BUTTONS.map(([action, desc, emoji]) => {
                   const cost = action in ACTION_COSTS ? formatSolFromLamports(ACTION_COSTS[action as keyof typeof ACTION_COSTS]) : "0";
                   
-                  // Bloquer les actions spéciales si l'utilisateur n'a pas encore fait de deposit dans ce cycle
-                  // On vérifie si le vault a un leader ET si ce n'est pas l'utilisateur
-                  const cycleHasLeader = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
-                  const userIsLeader = !!(sessionWallet && vault && vault.leader === sessionWallet.publicKey.toBase58());
-                  const userHasDeposited = cycleHasLeader && userIsLeader;
+                  // Logique de blocage des actions:
+                  // 1. Si pas de cycle actif (leader = 1111...1111) → Seul Deposit autorisé
+                  // 2. Si cycle actif mais user n'est pas le leader → Seul Deposit autorisé (pour prendre le leadership)
+                  // 3. Si user est le leader → Toutes les actions autorisées
                   
-                  // Seul Deposit est toujours autorisé, les autres actions nécessitent d'avoir fait un deposit
-                  const isBlocked = action !== "Deposit" && !userHasDeposited && cycleHasLeader;
+                  const cycleActive = !!(vault && vault.leader && vault.leader !== "11111111111111111111111111111111");
+                  const userIsLeader = !!(sessionWallet && vault && vault.leader === sessionWallet.publicKey.toBase58());
+                  
+                  // Bloquer toutes les actions sauf Deposit si:
+                  // - Pas de cycle actif OU
+                  // - Cycle actif mais user n'est pas le leader
+                  const isBlocked = action !== "Deposit" && (!cycleActive || !userIsLeader);
                   
                   return (
                     <button
@@ -499,7 +503,7 @@ export default function PlayPage() {
                       onClick={() => handleAction(action as keyof typeof ACTION_COSTS)}
                       disabled={loading || !sessionWallet || !programId || isBlocked}
                       className="action-btn-vertical"
-                      title={isBlocked ? "Vous devez d'abord faire un Deposit dans ce cycle" : desc}
+                      title={isBlocked ? (cycleActive ? "Vous devez être le leader pour utiliser cette action" : "Faites un Deposit pour démarrer un cycle") : desc}
                     >
                       <span className="action-emoji">{emoji}</span>
                       <div className="action-info">
